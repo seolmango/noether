@@ -66,6 +66,8 @@ struct Rt {
     b: u32,
     tmin: u64,
     seed: u64,
+    /// The program asked for `seed=random`.
+    random: bool,
     spacing: i64,
     vacuum_base: i64,
     packets: *mut Packet,
@@ -176,6 +178,13 @@ fn critical_temperature(r: &Rt) -> u64 {
     1u64 << (2 * (r.l - r.h)).clamp(0, 62)
 }
 
+/// A random number from the operating system. The standard library seeds its
+/// hash maps this way, which saves depending on a random number crate.
+fn system_entropy() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    std::collections::hash_map::RandomState::new().build_hasher().finish()
+}
+
 #[inline(always)]
 fn mix(mut z: u64) -> u64 {
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -284,7 +293,8 @@ impl Rt {
     }
 }
 
-/// `desc` is [h, l, c, b, tmin, seed, spacing, vacuum_base, n_packets, n_tiles].
+/// `desc` is [h, l, c, b, tmin, seed, spacing, vacuum_base, n_packets, n_tiles,
+/// random].
 /// `meta` holds four i64 per packet: centre, mass, fermion, tile slot.
 #[no_mangle]
 pub unsafe extern "C" fn noe_init(
@@ -294,7 +304,7 @@ pub unsafe extern "C" fn noe_init(
     tiles: *mut Tile,
     tile_keys: *const i64,
 ) {
-    let d = std::slice::from_raw_parts(desc, 10);
+    let d = std::slice::from_raw_parts(desc, 11);
     let (n_packets, n_tiles) = (d[8] as usize, d[9] as usize);
     let tmin = d[4] as u64;
     let mut table = HashMap::with_capacity(n_tiles);
@@ -323,7 +333,8 @@ pub unsafe extern "C" fn noe_init(
         c: d[2] as u32,
         b: d[3] as u32,
         tmin,
-        seed: d[5] as u64,
+        seed: if d[10] != 0 { system_entropy() } else { d[5] as u64 },
+        random: d[10] != 0,
         spacing: d[6],
         vacuum_base: d[7],
         packets,
@@ -391,10 +402,21 @@ pub fn heat(tile: *mut Tile, q: u64, tick: u64) {
     unsafe { (*tile).t = (t + q).min(T_MAX) };
 }
 
+/// The current temperature of a tile.
+pub fn temperature(tile: *mut Tile, tick: u64) -> u64 {
+    rt().temp(tile, tick)
+}
+
 /// Switches I/O to memory and makes traps panic. Call right after `noe_init`.
-pub fn embed(input: Vec<u8>, interactive: bool) {
+///
+/// A host with no system randomness supplies `entropy`, which replaces the seed
+/// of a `seed=random` program. Running again with the same value replays it.
+pub fn embed(input: Vec<u8>, interactive: bool, entropy: u64) {
     let r = rt();
     r.interactive = interactive;
+    if r.random {
+        r.seed = entropy;
+    }
     r.out = Box::new(Capture);
     r.input = Box::new(std::io::Cursor::new(input));
     r.embedded = true;

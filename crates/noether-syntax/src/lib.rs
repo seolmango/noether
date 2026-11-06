@@ -92,7 +92,8 @@ pub struct Stmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StmtKind {
-    Field(Vec<(String, u64)>),
+    /// A value of None is the word `random`.
+    Field(Vec<(String, Option<u64>)>),
     Decl(Decl),
     Path { name: String, params: Vec<String>, body: Vec<Stmt> },
     Write(Target, Value),
@@ -385,7 +386,13 @@ impl Parser {
                 while *self.peek(0) != Tok::Eol {
                     let key = self.name()?;
                     self.expect("=")?;
-                    params.push((key, self.uint()?));
+                    let value = if self.at_word("random") {
+                        self.p += 1;
+                        None
+                    } else {
+                        Some(self.uint()?)
+                    };
+                    params.push((key, value));
                 }
                 Ok(StmtKind::Field(params))
             }

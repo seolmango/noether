@@ -88,7 +88,7 @@ thermo: 16418 ticks, peak T 10425 (critical 4096), 12 noisy reads, 13954 bits er
 
 ## 플레이그라운드
 
-[site/](site/)는 브라우저에서 코드를 실행하고 온도를 열화상도로 보여주는 정적 페이지입니다. 터미널 창에서 입출력을 직접 주고받을 수 있습니다. 실행 엔진을 WebAssembly로 컴파일해서 쓰므로 서버가 필요 없습니다.
+[site/](site/)는 브라우저에서 코드를 실행하고 온도 변화와 변수의 파동을 틱별로 보여주는 정적 페이지입니다. 터미널 창에서 입출력을 직접 주고받을 수 있습니다. 실행 엔진을 WebAssembly로 컴파일해서 쓰므로 서버가 필요 없습니다.
 
 **GitHub Pages에 올리기:** 저장소를 GitHub에 푸시하고, 저장소의 Settings > Pages에서 Source를 GitHub Actions로 고릅니다. 이후 `main`에 푸시할 때마다 [워크플로](.github/workflows/pages.yml)가 빌드와 배포를 합니다.
 

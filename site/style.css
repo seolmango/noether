@@ -138,13 +138,22 @@ main {
 
 .result {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr);
   min-height: 0;
 }
 
-.plot { position: relative; min-height: 0; margin: 16px 16px 0; }
+.views { display: flex; gap: 4px; padding: 10px 16px 0; }
+.views button { height: 28px; padding: 0 12px; color: var(--soft); border-color: transparent; }
+.views button[aria-pressed="true"] { color: var(--ink); border-color: var(--line); }
 
-#heat {
+.plot { position: relative; min-height: 0; margin: 8px 16px 0; }
+
+.scrub { display: flex; align-items: center; gap: 10px; padding: 6px 16px 0; color: var(--soft); font-size: 13px; }
+.scrub button { height: 28px; padding: 0 12px; }
+.scrub input { flex: 1; min-width: 0; accent-color: var(--cold); }
+#frame-tick { min-width: 72px; text-align: right; font-variant-numeric: tabular-nums; }
+
+#heat, #wave {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -238,6 +247,7 @@ main {
   .source { border-right: 0; border-bottom: 1px solid var(--line); }
   .editor { flex: none; height: 48vh; }
   .result { display: block; }
+  .views { padding-top: 12px; }
   .plot { height: 220px; }
   #screen { height: 280px; flex: none; }
 }

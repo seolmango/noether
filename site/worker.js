@@ -33,7 +33,7 @@ self.onmessage = async ({ data }) => {
   } else {
     try {
       wasm.run(...put(wasm, data.source), ...put(wasm, data.input), BUDGET,
-               data.interactive ? 1 : 0);
+               data.interactive ? 1 : 0, data.entropy);
     } catch {
       // A trap or a stack overflow. `finish` reports what happened.
     }

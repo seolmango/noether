@@ -5,32 +5,21 @@
 # 날카로운 읽기가 그 값을 무작위로 정하고, 정해진 값은
 # 변수에 남습니다. 그래서 상자를 여는 순간 운명이 갈리고,
 # 그 뒤로는 몇 번을 봐도 같습니다.
-#
-# 같은 시드면 결과도 같으므로, 평행우주마다 다른 원자를
-# 씁니다. 노이즈는 주소마다 독립입니다.
-field seed=11
+field seed=random
 
-fermion atom[256]
+fermion atom
 fermion cat
-fermion universe
 fermion scratch
 fermion look
 
 |cat> <- 1
-
-emit "평행우주를 고르세요 (0~255): "
-|universe> <- absorb
-while <universe|~32 > 255
- lower universe
-while <universe|~32 < 0
- raise universe
 
 emit "상자가 닫혀 있습니다. 고양이의 운명은 아직 정해지지 않았습니다.\n"
 emit "Enter를 누르면 상자를 엽니다: "
 |scratch> <- absorb
 
 # 단 한 번의 관측이 원자의 값을 정한다
-if <atom[<universe|~32]| > 0
+if <atom| > 0
  |cat> <- 0
 
 if <cat|~32 > 0
@@ -42,6 +31,6 @@ emit "원자를 다시 들여다봅니다:"
 |look> <- 3
 while <look|~32 > 0
  emit " "
- emitn <atom[<universe|~32]|~32
+ emitn <atom|~32
  lower look
 emit "\n한 번 정해진 값은 바뀌지 않습니다.\n"

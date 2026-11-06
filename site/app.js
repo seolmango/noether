@@ -22,6 +22,7 @@ let running = false;
 let preset = ""; // input the example supplies by itself
 let stdin = "";
 let eof = false;
+let entropy = 0; // a seed=random program keeps this across those reruns
 
 // ---------------------------------------------------------------- worker
 
@@ -42,6 +43,8 @@ function say(text) {
 function run() {
   stdin = preset;
   eof = false;
+  const [a, b] = crypto.getRandomValues(new Uint32Array(2));
+  entropy = a * 2 ** 21 + (b >>> 11);
   execute();
 }
 
@@ -52,7 +55,7 @@ function execute() {
   stdinField.hidden = true;
   say("");
   $("state").textContent = "실행 중";
-  worker.postMessage({ kind: "run", source: code.value, input: stdin, interactive: !eof });
+  worker.postMessage({ kind: "run", source: code.value, input: stdin, interactive: !eof, entropy });
 }
 
 function idle() {
@@ -90,9 +93,10 @@ function finishRun(r) {
   if (r.status === "input") stdinField.focus({ preventScroll: true });
   screen.scrollTop = screen.scrollHeight;
   const n = (v) => Number(v).toLocaleString("ko-KR");
+  loadFilm(r);
   $("summary").textContent =
     `최고 온도 ${n(r.peak)}, 임계 온도 ${n(r.critical)}, 흔들린 읽기 ${n(r.noisy)}회`;
-  draw();
+  render();
 }
 
 // ---------------------------------------------------------------- editor
@@ -301,6 +305,10 @@ function drawLegend() {
 
 $("plot").addEventListener("pointermove", (e) => {
   const tip = $("tip");
+  if (view === "wave") {
+    hoverWave(e);
+    return;
+  }
   const box = $("heat").getBoundingClientRect();
   const x = e.clientX - box.left - LABEL_WIDTH;
   const y = e.clientY - box.top;
@@ -325,10 +333,234 @@ $("plot").addEventListener("pointermove", (e) => {
 });
 $("plot").addEventListener("pointerleave", () => { $("tip").hidden = true; });
 
-new ResizeObserver(draw).observe($("heat"));
+// ---------------------------------------------------------------- waves
+
+let view = "heat";
+let film = null; // the current recording, with its compressed address axis
+let playing = 0;
+
+function render() {
+  if (view === "heat") draw();
+  else drawWave();
+}
+
+function setView(next) {
+  view = next;
+  $("view-heat").setAttribute("aria-pressed", next === "heat");
+  $("view-wave").setAttribute("aria-pressed", next === "wave");
+  $("heat").hidden = next !== "heat";
+  $("wave").hidden = next !== "wave";
+  $("scrub").hidden = next !== "wave";
+  $("tip").hidden = true;
+  stopPlaying();
+  render();
+}
+
+// Far-apart variables would be invisible on a true scale. Gaps are capped just
+// above the widest packet, so anything that can overlap keeps its real distance.
+function loadFilm(r) {
+  stopPlaying();
+  if (!r.film || r.film.names.length === 0 || r.film.ticks.length === 0) {
+    film = null;
+    return;
+  }
+  const f = r.film;
+  const count = f.names.length;
+  const order = f.centres.map((c, i) => i).sort((a, b) => f.centres[a] - f.centres[b]);
+  const pos = new Array(count);
+  const cap = 2.2 * r.lambda;
+  let at = 0;
+  order.forEach((i, n) => {
+    if (n > 0) at += Math.min(f.centres[i] - f.centres[order[n - 1]], cap);
+    pos[i] = at;
+  });
+  // The tallest the summed curve can get: packets close enough to overlap add up.
+  let peak = 1;
+  let negative = false;
+  for (let frame = 0; frame < f.ticks.length; frame += 1) {
+    let group = 0;
+    order.forEach((i, n) => {
+      if (n > 0 && pos[i] - pos[order[n - 1]] > 2 * r.lambda) group = 0;
+      const v = f.values[frame * count + i];
+      group += Math.abs(v);
+      negative ||= v < 0;
+      peak = Math.max(peak, group);
+    });
+  }
+  film = { ...f, count, pos, span: at, peak, negative, r };
+  const slider = $("frame");
+  slider.max = f.ticks.length - 1;
+  slider.value = slider.max;
+  showTick();
+}
+
+function showTick() {
+  const i = Number($("frame").value);
+  $("frame-tick").textContent = film ? `틱 ${film.ticks[i].toLocaleString("ko-KR")}` : "";
+}
+
+function widthAt(temp, mass, r) {
+  const t = Math.floor(Math.log2(Math.max(temp, 1)));
+  return Math.max(1, r.lambda / 2 ** Math.floor((t + mass) / 2));
+}
+
+function drawWave() {
+  const canvas = $("wave");
+  const box = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = box.width * dpr;
+  canvas.height = box.height * dpr;
+  const g = canvas.getContext("2d");
+  g.scale(dpr, dpr);
+  g.clearRect(0, 0, box.width, box.height);
+  g.font = '12px "IBM Plex Sans KR", sans-serif';
+  g.textBaseline = "middle";
+  const soft = token("--soft");
+  if (!film) {
+    g.fillStyle = soft;
+    g.fillText("전역 변수를 선언한 프로그램을 실행하면 파동이 보입니다.", 0, box.height / 2);
+    return;
+  }
+  const frame = Number($("frame").value);
+  const { r, count, pos, peak } = film;
+  const margin = r.lambda * 1.1;
+  const scale = box.width / (film.span + 2 * margin);
+  const toX = (p) => (p + margin) * scale;
+  const mid = film.negative ? (box.height - 20) / 2 : box.height - 40;
+  const reach = film.negative ? mid - 22 : mid - 24;
+  const toY = (v) => mid - (v / peak) * reach;
+  const color = ramp();
+  const top = Math.log2(r.critical);
+  const items = [];
+  for (let i = 0; i < count; i += 1) {
+    const v = film.values[frame * count + i];
+    const temp = film.temps[frame * count + i];
+    items.push({ i, v, temp, sigma: widthAt(temp, film.masses[i], r) });
+  }
+  film.items = items;
+
+  g.strokeStyle = token("--line");
+  g.beginPath();
+  g.moveTo(0, mid);
+  g.lineTo(box.width, mid);
+  g.stroke();
+
+  for (const p of items) {
+    const c = pos[p.i];
+    g.beginPath();
+    g.moveTo(toX(c - p.sigma), mid);
+    g.lineTo(toX(c), toY(p.v));
+    g.lineTo(toX(c + p.sigma), mid);
+    g.closePath();
+    const hot = p.temp >= r.critical;
+    g.globalAlpha = .7;
+    g.fillStyle = hot ? token("--heat-over") : color(Math.log2(Math.max(p.temp, 1)) / top);
+    g.fill();
+    g.globalAlpha = 1;
+    g.fillStyle = color(Math.log2(Math.max(p.temp, 1)) / top);
+    g.fillRect(toX(c - p.sigma), mid - 1, 2 * p.sigma * scale, 3);
+  }
+
+  // What a read at each spot would return: the packets added together.
+  g.strokeStyle = token("--ink");
+  g.lineWidth = 1.5;
+  g.beginPath();
+  for (let x = 0; x <= box.width; x += 1) {
+    const at = x / scale - margin;
+    let sum = 0;
+    for (const p of items) {
+      const d = Math.abs(at - pos[p.i]);
+      if (d < p.sigma) sum += p.v * (1 - d / p.sigma);
+    }
+    if (x === 0) g.moveTo(x, toY(sum));
+    else g.lineTo(x, toY(sum));
+  }
+  g.stroke();
+  g.lineWidth = 1;
+
+  // Label as many variables as fit, left to right.
+  g.textAlign = "center";
+  let free = -Infinity;
+  const byPos = [...items].sort((a, b) => pos[a.i] - pos[b.i]);
+  for (const p of byPos) {
+    const x = toX(pos[p.i]);
+    const label = film.names[p.i];
+    const w = g.measureText(label).width;
+    if (x - w / 2 < free) continue;
+    free = x + w / 2 + 10;
+    g.fillStyle = soft;
+    g.fillText(label, x, box.height - 8);
+    g.fillStyle = token("--ink");
+    const value = Math.abs(p.v) < 1e6 ? String(p.v) : p.v.toExponential(1);
+    g.fillText(value, x, p.v >= 0 ? toY(p.v) - 10 : toY(p.v) + 10);
+  }
+  g.textAlign = "left";
+}
+
+function hoverWave(e) {
+  const tip = $("tip");
+  if (!film || !film.items) return;
+  const box = $("wave").getBoundingClientRect();
+  const margin = film.r.lambda * 1.1;
+  const scale = box.width / (film.span + 2 * margin);
+  const at = (e.clientX - box.left) / scale - margin;
+  let best = null;
+  for (const p of film.items) {
+    const d = Math.abs(at - film.pos[p.i]);
+    if (d <= Math.max(p.sigma, 8 / scale) && (!best || d < best.d)) best = { ...p, d };
+  }
+  if (!best) {
+    tip.hidden = true;
+    return;
+  }
+  const n = (v) => Math.round(v).toLocaleString("ko-KR");
+  tip.textContent = "";
+  const name = document.createElement("strong");
+  name.textContent = film.names[best.i];
+  tip.append(name, document.createElement("br"),
+             `값 ${n(best.v)}, 폭 ${n(best.sigma)}, 온도 ${n(best.temp)}`);
+  tip.hidden = false;
+  const x = e.clientX - box.left;
+  tip.style.left = `${Math.max(0, Math.min(x + 12, box.width - tip.offsetWidth))}px`;
+  tip.style.top = `${e.clientY - box.top + 14}px`;
+}
+
+function stopPlaying() {
+  clearInterval(playing);
+  playing = 0;
+  $("play").textContent = "재생";
+}
+
+$("view-heat").addEventListener("click", () => setView("heat"));
+$("view-wave").addEventListener("click", () => setView("wave"));
+$("frame").addEventListener("input", () => {
+  stopPlaying();
+  showTick();
+  drawWave();
+});
+$("play").addEventListener("click", () => {
+  if (playing) {
+    stopPlaying();
+    return;
+  }
+  const slider = $("frame");
+  if (slider.value === slider.max) slider.value = 0;
+  $("play").textContent = "멈춤";
+  playing = setInterval(() => {
+    if (slider.value === slider.max) {
+      stopPlaying();
+      return;
+    }
+    slider.value = Number(slider.value) + 1;
+    showTick();
+    drawWave();
+  }, 40);
+});
+
+new ResizeObserver(render).observe($("plot"));
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   drawLegend();
-  draw();
+  render();
 });
 
 // On GitHub Pages the repository can be worked out from the address.

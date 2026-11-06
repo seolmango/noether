@@ -122,6 +122,7 @@ pub unsafe extern "C" fn run(
     m: usize,
     budget: f64,
     interactive: i32,
+    entropy: f64,
 ) {
     let source = text(src, n);
     let stdin = std::slice::from_raw_parts(input, m).to_vec();
@@ -130,8 +131,14 @@ pub unsafe extern "C" fn run(
         Ok(module) => {
             MODULE = Some(module);
             let module = MODULE.as_ref().unwrap();
-            let tick =
-                noether_vm::run_embedded(module, budget as u64, stdin, SAMPLES, interactive != 0);
+            let tick = noether_vm::run_embedded(
+                module,
+                budget as u64,
+                stdin,
+                SAMPLES,
+                interactive != 0,
+                entropy as u64,
+            );
             TICK = Some(tick);
         }
     }
@@ -219,6 +226,31 @@ pub unsafe extern "C" fn finish() {
         };
         quote(&mut out, &label);
     }
-    out.push_str("]}");
+    out.push(']');
+    write_film(&mut out, module);
+    out.push('}');
     set_result(out);
+}
+
+fn write_film(out: &mut String, module: &Module) {
+    let Some(film) = noether_vm::take_film() else { return };
+    let cfg = &module.cfg;
+    let _ = write!(out, ",\"lambda\":{},\"hbar\":{}", 1u64 << cfg.l, 1u64 << cfg.h);
+    out.push_str(",\"film\":{\"names\":[");
+    for (i, p) in film.shown.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        quote(out, &module.global.packets[*p].name);
+    }
+    let join = |out: &mut String, key: &str, items: Vec<String>| {
+        let _ = write!(out, "],\"{key}\":[{}", items.join(","));
+    };
+    let packets = &module.global.packets;
+    join(out, "centres", film.shown.iter().map(|p| packets[*p].c.to_string()).collect());
+    join(out, "masses", film.shown.iter().map(|p| packets[*p].mass.to_string()).collect());
+    join(out, "ticks", film.ticks.iter().map(u64::to_string).collect());
+    join(out, "values", film.values.iter().map(i64::to_string).collect());
+    join(out, "temps", film.temps.iter().map(u64::to_string).collect());
+    out.push_str("]}");
 }

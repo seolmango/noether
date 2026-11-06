@@ -35,9 +35,19 @@
   </section>
 
   <section class="result" aria-label="실행 결과">
+    <div class="views" role="group" aria-label="보기">
+      <button id="view-heat" aria-pressed="true">온도</button>
+      <button id="view-wave" aria-pressed="false">파동</button>
+    </div>
     <div class="plot" id="plot">
       <canvas id="heat" tabindex="0" aria-label="메모리 타일별 시간에 따른 온도"></canvas>
+      <canvas id="wave" tabindex="0" aria-label="틱별 변수의 파동" hidden></canvas>
       <div class="tip" id="tip" hidden></div>
+    </div>
+    <div class="scrub" id="scrub" hidden>
+      <button id="play">재생</button>
+      <input id="frame" type="range" min="0" max="0" value="0" aria-label="틱 선택">
+      <span id="frame-tick"></span>
     </div>
     <div class="caption">
       <span id="summary"></span>

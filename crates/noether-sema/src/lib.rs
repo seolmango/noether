@@ -12,6 +12,8 @@ pub struct Config {
     pub b: u32,
     pub tmin: u64,
     pub seed: u64,
+    /// `seed=random`: draw a new seed for every run.
+    pub random: bool,
     /// Pauli spacing D = 2 * lambda.
     pub spacing: i64,
 }
@@ -88,12 +90,20 @@ fn config(program: &[Stmt]) -> Result<Config> {
         ("tmin", 1),
         ("seed", 0),
     ]);
+    let mut random = false;
     for s in program {
         if let StmtKind::Field(params) = &s.kind {
             for (k, v) in params {
-                match cfg.get_mut(k.as_str()) {
-                    Some(slot) => *slot = *v,
-                    None => return err(s.line, format!("unknown field parameter {k}")),
+                match (cfg.get_mut(k.as_str()), v) {
+                    (None, _) => return err(s.line, format!("unknown field parameter {k}")),
+                    (Some(_), None) if k != "seed" => {
+                        return err(s.line, format!("only seed can be random, not {k}"))
+                    }
+                    (Some(_), None) => random = true,
+                    (Some(slot), Some(v)) => {
+                        *slot = *v;
+                        random &= k != "seed";
+                    }
                 }
             }
         }
@@ -109,6 +119,7 @@ fn config(program: &[Stmt]) -> Result<Config> {
         b: exponent(&cfg, "tile")?,
         tmin: 1 << exponent(&cfg, "tmin")?,
         seed: cfg["seed"],
+        random,
         spacing: 2 << l,
     })
 }
@@ -443,8 +454,8 @@ fn impure(k: &StmtKind) -> bool {
 
 /// The static field as the runtime wants it.
 pub struct Tables {
-    /// h, l, c, b, tmin, seed, spacing, vacuum_base, n_packets, n_tiles
-    pub desc: [i64; 10],
+    /// h, l, c, b, tmin, seed, spacing, vacuum_base, n_packets, n_tiles, random
+    pub desc: [i64; 11],
     /// Four words per packet: centre, mass, fermion, tile slot.
     pub meta: Vec<i64>,
     /// Tile key of each dense slot.
@@ -483,6 +494,7 @@ impl Module {
             self.vacuum_base,
             n as i64,
             slots.len() as i64,
+            cfg.random as i64,
         ];
         Tables { desc, meta, keys, slots, packet_slot }
     }

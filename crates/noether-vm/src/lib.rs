@@ -12,6 +12,85 @@ enum Flow {
     Return(i64),
 }
 
+/// A recording of global variables over time, for the playground. Frames are
+/// thinned evenly once `cap` is reached, so a long run keeps its whole span.
+pub struct Film {
+    /// Global packets on film, by index.
+    pub shown: Vec<usize>,
+    pub ticks: Vec<u64>,
+    /// One value and one temperature per shown packet, frame after frame.
+    pub values: Vec<i64>,
+    pub temps: Vec<u64>,
+    tiles: Vec<*mut Tile>,
+    cap: usize,
+    every: u64,
+    next: u64,
+}
+
+static mut FILM: Option<Film> = None;
+
+/// Takes the recording of the last embedded run. Also usable after a trap.
+#[allow(static_mut_refs)]
+pub fn take_film() -> Option<Film> {
+    unsafe { FILM.take() }
+}
+
+impl Film {
+    fn new(module: &Module, limit: usize, cap: usize) -> Film {
+        // Named scalars first: they are what a reader is looking for.
+        let packets = &module.global.packets;
+        let mut shown: Vec<usize> = (0..packets.len()).collect();
+        shown.sort_by_key(|i| packets[*i].name.contains('['));
+        shown.truncate(limit);
+        let tiles = shown.iter().map(|i| rt::noe_tile_at(packets[*i].c)).collect();
+        Film {
+            shown,
+            ticks: Vec::new(),
+            values: Vec::new(),
+            temps: Vec::new(),
+            tiles,
+            cap,
+            every: 1,
+            next: 0,
+        }
+    }
+
+    fn thin(&mut self) {
+        let n = self.shown.len();
+        let keep = |list: &mut Vec<_>, width: usize| {
+            let mut i = 0;
+            list.retain(|_| {
+                i += 1;
+                ((i - 1) / width) % 2 == 0
+            });
+        };
+        keep(&mut self.ticks as &mut Vec<u64>, 1);
+        let mut i = 0;
+        self.values.retain(|_| {
+            i += 1;
+            ((i - 1) / n.max(1)) % 2 == 0
+        });
+        let mut i = 0;
+        self.temps.retain(|_| {
+            i += 1;
+            ((i - 1) / n.max(1)) % 2 == 0
+        });
+        self.every *= 2;
+    }
+
+    fn shoot(&mut self, packets: &[Packet], tick: u64) {
+        if self.ticks.len() == self.cap {
+            self.thin();
+        }
+        self.ticks.push(tick);
+        for (i, index) in self.shown.iter().enumerate() {
+            self.values.push(packets[*index].v);
+            self.temps.push(rt::temperature(self.tiles[i], tick));
+        }
+        self.next = tick + self.every;
+    }
+}
+
 struct Resolved {
     ptr: *mut Packet,
     centre: i64,
@@ -203,7 +282,17 @@ impl Vm<'_> {
         Flow::Next
     }
 
+    #[allow(static_mut_refs)]
+    fn roll(&mut self) {
+        if let Some(film) = unsafe { FILM.as_mut() } {
+            if self.tick >= film.next {
+                film.shoot(&self.packets, self.tick);
+            }
+        }
+    }
+
     fn op(&mut self, op: &Op) -> Flow {
+        self.roll();
         self.steps += 1;
         if self.steps > self.budget {
             rt::noe_trap(3, 0);
@@ -311,6 +400,9 @@ impl Vm<'_> {
     }
 }
 
+const FILM_PACKETS: usize = 48;
+const FILM_FRAMES: usize = 600;
+
 /// Lowers without optimizations: this executor always runs the full rule.
 fn prepare(module: &Module) -> Program {
     lower(module, Options { isolate: false, symmetry: false })
@@ -340,6 +432,9 @@ fn execute(module: &Module, program: &Program, budget: u64, tables: &mut Field) 
         tmin: module.cfg.tmin,
     };
     vm.ops(&program.main);
+    if let Some(film) = unsafe { (*std::ptr::addr_of_mut!(FILM)).as_mut() } {
+        film.shoot(&vm.packets, vm.tick);
+    }
     vm.tick
 }
 
@@ -391,11 +486,13 @@ pub fn run_embedded(
     input: Vec<u8>,
     samples: usize,
     interactive: bool,
+    entropy: u64,
 ) -> u64 {
     let program = Box::leak(Box::new(prepare(module)));
     let field = Box::leak(Box::new(boot(module)));
-    rt::embed(input, interactive);
+    rt::embed(input, interactive, entropy);
     rt::start_thermo(None, samples);
+    unsafe { FILM = Some(Film::new(module, FILM_PACKETS, FILM_FRAMES)) };
     let tick = execute(module, program, budget, field);
     rt::noe_finish(tick);
     tick

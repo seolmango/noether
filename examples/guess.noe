@@ -2,15 +2,14 @@
 #
 # 난수 함수는 없지만 날카로운 읽기는 값을 흔듭니다.
 # 비밀 숫자를 일부러 여러 번 날카롭게 읽어서 섞습니다.
-field seed=2024
+field seed=random
 
 fermion secret
 fermion n @ 8192
 fermion guess @ 16384
 fermion tries @ 24576
 
-emit "아무 숫자나 입력하면 비밀 숫자를 섞습니다: "
-|n> <- absorb
+|n> <- 12
 |secret> <- 50
 while <n|~32 > 0
  |guess> <- <secret|

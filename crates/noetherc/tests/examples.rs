@@ -38,7 +38,7 @@ const EXAMPLES: [(&str, &str, &str); 10] = [
     ),
 ];
 
-const REJECTED: [(&str, &str); 8] = [
+const REJECTED: [(&str, &str); 9] = [
     ("fermion i\nwhile <i|~32 > 0\n  raise i\n", "energy level"),
     ("fermion i\nwhile <i|~32 > 0\n    raise i\n", "forbidden transition"),
     ("fermion a @ 0\nfermion b @ 100\n", "Pauli"),
@@ -46,6 +46,7 @@ const REJECTED: [(&str, &str); 8] = [
     ("fermion a\nsymmetry time\n |a> <- 1\n", "symmetry time"),
     ("fermion a[4]\nfermion s\nsymmetry translate k in a\n raise s\n", "may only change"),
     ("emit <nope|~32\n", "unknown name"),
+    ("field hbar=random\n", "only seed can be random"),
     ("path f(a)\n return a\nemit f(1)\n", "closed system"),
 ];
 
@@ -105,7 +106,7 @@ fn examples_run() {
 
 #[test]
 fn guessing_every_number_finds_the_secret() {
-    let mut input = String::from("3\n");
+    let mut input = String::new();
     (1..=100).for_each(|n| input.push_str(&format!("{n}\n")));
     let out = feed(Command::new(NOETHERC).arg(example("guess")).arg("--run"), &input);
     assert!(String::from_utf8_lossy(&out.stdout).ends_with("번 만에 맞혔습니다.\n"));
@@ -113,21 +114,29 @@ fn guessing_every_number_finds_the_secret() {
 
 #[test]
 fn the_cat_is_decided_by_opening_the_box_and_stays_decided() {
-    let open = |universe: u32| {
-        let input = format!("{universe}\n\n");
-        let out = feed(Command::new(NOETHERC).arg(example("cat")).arg("--run"), &input);
-        String::from_utf8_lossy(&out.stdout).into_owned()
-    };
     let mut alive = 0;
-    for universe in 0..40 {
-        let text = open(universe);
+    for _ in 0..40 {
+        let out = feed(Command::new(NOETHERC).arg(example("cat")).arg("--run"), "\n");
+        let text = String::from_utf8_lossy(&out.stdout);
         alive += text.contains("살아 있습니다") as u32;
         let looks = text.split("들여다봅니다:").nth(1).unwrap().lines().next().unwrap();
         let values: Vec<&str> = looks.split_whitespace().collect();
         assert_eq!(values.len(), 3);
         assert!(values.iter().all(|v| *v == values[0]), "{text}");
     }
-    assert!((10..=30).contains(&alive), "{alive} of 40 survived");
+    assert!((8..=32).contains(&alive), "{alive} of 40 survived");
+}
+
+#[test]
+fn seed_random_differs_between_runs_of_one_executable() {
+    let text = "field seed=random\nfermion v\nemit <v|\nemit <v|\nemit <v|\nemit <v|\n";
+    build_runtime();
+    let exe = dir().join("random.exe");
+    let built = Command::new(NOETHERC).arg(source("random", text)).arg("-o").arg(&exe).output();
+    assert!(built.unwrap().status.success());
+    let runs: std::collections::HashSet<Vec<u8>> =
+        (0..6).map(|_| Command::new(&exe).output().unwrap().stdout).collect();
+    assert!(runs.len() > 1);
 }
 
 #[test]
