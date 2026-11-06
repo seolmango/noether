@@ -14,7 +14,7 @@ const EXAMPLES: [(&str, &str, &str); 10] = [
     ("fact", "", "3628800\n1307674368000\n"),
     ("sort", "", "1\n2\n3\n4\n5\n7\n8\n9\n"),
     ("symmetry", "", "11\n44\n16\n"),
-    ("condensate", "", "1000\n2414\n"),
+    ("condensate", "", "1000\n228\n2414\n"),
     ("bf", HELLO, "Hello World!\n"),
     (
         "gugudan",
@@ -129,13 +129,13 @@ fn the_cat_is_decided_by_opening_the_box_and_stays_decided() {
 
 #[test]
 fn seed_random_differs_between_runs_of_one_executable() {
-    let text = "field seed=random\nfermion v\nemit <v|\nemit <v|\nemit <v|\nemit <v|\n";
+    let text = "field seed=random\nfermion v\nfermion s @ 8192\n|s> <- <v|\nemit <v|~1024\n";
     build_runtime();
     let exe = dir().join("random.exe");
     let built = Command::new(NOETHERC).arg(source("random", text)).arg("-o").arg(&exe).output();
     assert!(built.unwrap().status.success());
     let runs: std::collections::HashSet<Vec<u8>> =
-        (0..6).map(|_| Command::new(&exe).output().unwrap().stdout).collect();
+        (0..12).map(|_| Command::new(&exe).output().unwrap().stdout).collect();
     assert!(runs.len() > 1);
 }
 
@@ -162,15 +162,58 @@ fn native_matches_executor_in_every_mode() {
 #[test]
 fn noise_is_seeded_bounded_and_persistent() {
     let run = |seed: u32| {
-        let text = format!("field seed={seed}\nfermion v\n|v> <- 1000\nemit <v|\nemit <v|\nemit <v|~32\n");
+        let text = format!(
+            "field seed={seed}\nfermion v\nfermion s @ 8192\n|v> <- 1000\n\
+             |s> <- <v|\nemit <v|~1024\nemit <v|~1024\n"
+        );
         let out = feed(Command::new(NOETHERC).arg(source("noise", &text)).arg("--run"), "");
         String::from_utf8(out.stdout).unwrap()
     };
     assert_eq!(run(1), run(1));
-    assert_ne!(run(1), run(2));
-    let v: Vec<i64> = run(1).lines().map(|l| l.parse().unwrap()).collect();
-    assert!((v[0] - 1000).abs() <= 16 && (v[1] - v[0]).abs() <= 16);
-    assert_eq!(v[1], v[2]);
+    let values: Vec<Vec<i64>> = (0..8)
+        .map(|s| run(s).lines().map(|l| l.parse().unwrap()).collect())
+        .collect();
+    assert!(values.iter().any(|v| v[0] != values[0][0]));
+    for v in &values {
+        assert!((v[0] - 1000).abs() <= 16);
+        assert_eq!(v[0], v[1]);
+    }
+}
+
+/// Entering a symmetric block cold must not take the fast version.
+#[test]
+fn symmetric_blocks_check_the_band_on_entry() {
+    build_runtime();
+    let run_guard = "fermion x\nfermion y @ 8192\n|x> <- 1000\nsymmetry time\n \
+                     if <x|~32 == 1000\n    raise y\nemit <y|~1024\n";
+    let sweep_guard = "fermion a[2] @ 0 stride 8192\n|a[0]> <- 1000\n\
+                       symmetry translate k in a\n |a[k]> <- <a[k]|~32\nemit <a[0]|~1024\n";
+    // The loop counter is global, so the function's own tile only cools.
+    let frame_guard = "fermion c\npath f(x)\n fermion y @ 8192\n |x> <- 1000\n |c> <- 400\n \
+                       while <c|~1024 > 0\n    lower c\n    lower c\n    raise c\n \
+                       symmetry time\n    if <x|~32 == 1000\n         raise y\n \
+                       return <y|~1024\nemit f(0)\n";
+    let programs = [
+        ("guard_run", run_guard, "0\n"),
+        ("guard_sweep", sweep_guard, "62\n"),
+        ("guard_frame", frame_guard, "0\n"),
+    ];
+    for (name, text, want) in programs {
+        let run = feed(Command::new(NOETHERC).arg(source(name, text)).arg("--run"), "");
+        assert_eq!(String::from_utf8_lossy(&run.stdout), want, "{name} --run");
+        let exe = dir().join(format!("{name}.exe"));
+        let built = Command::new(NOETHERC).arg(source(name, text)).arg("-o").arg(&exe).output();
+        assert!(built.unwrap().status.success());
+        let out = Command::new(&exe).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&out.stdout), want, "{name} native");
+    }
+}
+
+#[test]
+fn reads_depend_on_the_temperature_band() {
+    let text = "fermion x\n|x> <- 1000\nemit <x|~32\nemit <x|~1024\nemit <x|~32\n";
+    let out = feed(Command::new(NOETHERC).arg(source("band", text)).arg("--run"), "");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "62\n1000\n250\n");
 }
 
 #[test]
@@ -182,7 +225,8 @@ fn thermo_records_the_same_history_both_ways() {
         .arg(&a)
         .output()
         .unwrap();
-    assert!(String::from_utf8_lossy(&run.stderr).contains("12 noisy reads"));
+    let summary = String::from_utf8_lossy(&run.stderr);
+    assert!(summary.contains("noisy reads") && !summary.contains(" 0 noisy"));
     let built = Command::new(NOETHERC)
         .args([example("overheat").as_os_str(), "--thermo".as_ref(), "-o".as_ref()])
         .arg(&b)

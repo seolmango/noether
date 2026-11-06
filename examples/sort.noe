@@ -1,13 +1,29 @@
-# Bubble sort over a lattice, indices held in fermions
+# 격자 버블 정렬
+#
+# 인덱스는 한 타일에 모아 서로 데우고, 격자 원소는 타일을
+# 따로 쓰므로 먼저 값을 넣으며 데운 뒤 ~256으로 읽는다.
 field seed=3
 
-fermion a[8] @ 0 stride 4096
-fermion i @ 40960
-fermion j @ 45056
-fermion t @ 49152
-boson   jn @ 53248
-fermion n @ 57344
+fermion i
+fermion j
+fermion jn
+fermion heater
+fermion a[8] @ 8192 stride 4096
 
+|heater> <- -1
+|heater> <- 0
+|heater> <- -1
+|heater> <- 0
+
+# 음수를 썼다 지워서 원소마다 온도를 16 이상으로 올린다
+|a[0]> <- -1
+|a[1]> <- -1
+|a[2]> <- -1
+|a[3]> <- -1
+|a[4]> <- -1
+|a[5]> <- -1
+|a[6]> <- -1
+|a[7]> <- -1
 |a[0]> <- 5
 |a[1]> <- 3
 |a[2]> <- 9
@@ -16,17 +32,19 @@ fermion n @ 57344
 |a[5]> <- 2
 |a[6]> <- 8
 |a[7]> <- 4
+
 |i> <- 7
-while <i|~32 > 0
+while <i|~64 > 0
  |j> <- 0
- while <j|~32 < <i|~32
-    |jn> <- <j|~32
+ while <j|~64 < <i|~64
+    |jn> <- <j|~64
     raise jn
-    if <a[<j|~32]|~32 > <a[<jn|~32]|~32
-         swap a[<j|~32] a[<jn|~32]
+    if <a[<j|~64]|~256 > <a[<jn|~64]|~256
+         swap a[<j|~64] a[<jn|~64]
     raise j
  lower i
+
 |i> <- 0
-while <i|~32 < 8
- emit <a[<i|~32]|~32
+while <i|~64 < 8
+ emit <a[<i|~64]|~256
  raise i

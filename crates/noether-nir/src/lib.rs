@@ -62,10 +62,12 @@ pub enum Plan {
     /// Nothing proved: run the full rule in the runtime.
     General,
     /// The contributing packets and their weights are static. The result is
-    /// (sum of v * weight) >> shift unless a packet turns out to be noisy.
-    Terms(Vec<Term>, u32),
-    /// Element i of a lattice reads exactly element i of each listed run.
-    Lattice(Vec<usize>),
+    /// (sum of v * weight) >> shift unless a term turns out to be noisy or a
+    /// listed packet is colder than 2^exponent.
+    Terms(Vec<Term>, u32, Vec<(usize, i64)>),
+    /// Element i of a lattice reads exactly element i of each run, given by its
+    /// first packet and the exponent of its lowest temperature.
+    Lattice(Vec<(usize, i64)>),
 }
 
 #[derive(Debug, Clone)]
@@ -86,8 +88,8 @@ pub struct Cond {
 /// A static run of packets that must stay below critical temperature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Guard {
-    Run { first: usize, count: usize, tc_exp: i64 },
-    Frame { tc_exp: i64 },
+    Run { first: usize, count: usize, tc_exp: i64, lo_exp: i64 },
+    Frame { tc_exp: i64, lo_exp: i64 },
 }
 
 #[derive(Debug, Clone)]
@@ -191,6 +193,10 @@ impl<'a> Lower<'a> {
     }
 
     /// The isolation pass for one address known at compile time.
+    ///
+    /// The plan assumes the packets involved are inside their band: warm enough
+    /// that none is wider than the window. Those it depends on are listed, and
+    /// a read outside the band falls back to the full rule.
     fn plan_at(&self, field: FieldId, x: i64, k: u32) -> Plan {
         if !self.opts.isolate {
             return Plan::General;
@@ -210,6 +216,7 @@ impl<'a> Lower<'a> {
         let lo = x as i128 - reach;
         let start = index.sorted.partition_point(|p| (p.0 as i128) <= lo);
         let mut terms = Vec::new();
+        let mut warm = Vec::new();
         let mut centred = true;
         for &(c, packet, mass) in &index.sorted[start..] {
             let d = (x as i128 - c as i128).abs();
@@ -220,13 +227,17 @@ impl<'a> Lower<'a> {
             if d >= 1i128 << k.max(s_max) {
                 continue; // out of reach at every temperature
             }
+            if k < s_max {
+                warm.push((packet, self.cfg.lo_exp(k, mass)));
+            }
+            if d >= 1i128 << k {
+                continue; // reaches this spot only when too cold
+            }
             let weight = if d == 0 {
                 1i128 << q
-            } else if k >= s_max {
+            } else {
                 centred = false;
                 ((1i128 << k) - d) << (q - k)
-            } else {
-                return Plan::General; // the weight would depend on temperature
             };
             terms.push(Term { packet, weight: weight as i64 });
         }
@@ -236,9 +247,9 @@ impl<'a> Lower<'a> {
         if centred {
             terms.iter_mut().for_each(|t| t.weight = 1);
             terms.sort_by_key(|t| t.packet);
-            Plan::Terms(terms, 0)
+            Plan::Terms(terms, 0, warm)
         } else {
-            Plan::Terms(terms, q)
+            Plan::Terms(terms, q, warm)
         }
     }
 
@@ -252,10 +263,15 @@ impl<'a> Lower<'a> {
         let mut result = Plan::Lattice(Vec::new());
         for j in 0..count {
             let x = base + j as i64 * stride;
-            let Plan::Terms(terms, 0) = self.plan_at(field, x, k) else {
+            let Plan::Terms(terms, 0, warm) = self.plan_at(field, x, k) else {
                 result = Plan::General;
                 break;
             };
+            // A cold neighbour outside the runs could not be checked cheaply.
+            if warm.iter().any(|(p, _)| !terms.iter().any(|t| t.packet == *p)) {
+                result = Plan::General;
+                break;
+            }
             let shifted: Vec<usize> = terms.iter().map(|t| t.packet.wrapping_sub(j)).collect();
             match &runs {
                 None => runs = Some(shifted),
@@ -267,7 +283,11 @@ impl<'a> Lower<'a> {
             }
         }
         if let (Plan::Lattice(_), Some(r)) = (&result, runs) {
-            result = Plan::Lattice(r);
+            let lows = r.iter().map(|first| {
+                let mass = self.mass_of(field, *first);
+                (*first, self.cfg.lo_exp(k, mass))
+            });
+            result = Plan::Lattice(lows.collect());
         }
         if count == 0 {
             result = Plan::General;
@@ -285,8 +305,13 @@ impl<'a> Lower<'a> {
         }
     }
 
+    /// A wider window costs more: friction grows with the window over hbar.
+    fn read_friction(&self, level: u32, k: u32) -> u64 {
+        self.friction(level) << k.saturating_sub(self.cfg.h)
+    }
+
     fn read(&mut self, a: &Addr, k: u32, level: u32) -> Box<Read> {
-        let friction = self.friction(level);
+        let friction = self.read_friction(level, k);
         let (field, loc, plan) = match a {
             Addr::Lit(x) => {
                 (FieldId::Global, Loc::Const(*x), self.plan_at(FieldId::Global, *x, k))
@@ -496,7 +521,7 @@ fn promotable(ops: &[Op]) -> Vec<(FieldId, usize)> {
         match e {
             Expr::Const(_) => true,
             Expr::Read(r) | Expr::Square(r) => match (&r.plan, &r.loc) {
-                (Plan::Terms(terms, _), Loc::Const(_)) => {
+                (Plan::Terms(terms, _, _), Loc::Const(_)) => {
                     out.extend(terms.iter().map(|t| (r.field, t.packet)));
                     true
                 }
@@ -527,15 +552,19 @@ fn promotable(ops: &[Op]) -> Vec<(FieldId, usize)> {
 
 fn collect_read(r: &Read, lw: &Lower, out: &mut Option<Vec<Guard>>) {
     let k = r.k;
+    let guard = |first: usize, count: usize, tc_exp: i64, lo_exp: i64| match r.field {
+        FieldId::Global => Guard::Run { first, count, tc_exp, lo_exp },
+        FieldId::Frame => Guard::Frame { tc_exp, lo_exp },
+    };
     match (&r.plan, &r.loc) {
-        (Plan::Terms(terms, _), _) => {
-            for t in terms {
-                let tc_exp = lw.cfg.tc_exp(lw.mass_of(r.field, t.packet));
-                if let Some(g) = out {
-                    g.push(match r.field {
-                        FieldId::Global => Guard::Run { first: t.packet, count: 1, tc_exp },
-                        FieldId::Frame => Guard::Frame { tc_exp },
-                    });
+        (Plan::Terms(terms, _, warm), _) => {
+            if let Some(g) = out {
+                for t in terms {
+                    let tc_exp = lw.cfg.tc_exp(lw.mass_of(r.field, t.packet));
+                    g.push(guard(t.packet, 1, tc_exp, 0));
+                }
+                for (packet, lo_exp) in warm {
+                    g.push(guard(*packet, 1, 63, *lo_exp));
                 }
             }
             if !terms.is_empty() && k <= lw.cfg.h {
@@ -544,13 +573,10 @@ fn collect_read(r: &Read, lw: &Lower, out: &mut Option<Vec<Guard>>) {
         }
         (Plan::Lattice(runs), Loc::Lattice { count, index, .. }) => {
             collect_expr(index, lw, out);
-            for &first in runs {
+            for &(first, lo_exp) in runs {
                 let tc_exp = lw.cfg.tc_exp(lw.mass_of(r.field, first));
                 if let Some(g) = out {
-                    g.push(match r.field {
-                        FieldId::Global => Guard::Run { first, count: *count, tc_exp },
-                        FieldId::Frame => Guard::Frame { tc_exp },
-                    });
+                    g.push(guard(first, *count, tc_exp, lo_exp));
                 }
             }
         }

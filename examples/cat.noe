@@ -5,12 +5,15 @@
 # 날카로운 읽기가 그 값을 무작위로 정하고, 정해진 값은
 # 변수에 남습니다. 그래서 상자를 여는 순간 운명이 갈리고,
 # 그 뒤로는 몇 번을 봐도 같습니다.
+#
+# 차가운 변수를 날카롭게 읽으면 값은 거의 안 잡히므로,
+# 값을 정하는 읽기와 값을 확인하는 넓은 읽기를 나눕니다.
 field seed=random
 
-fermion atom
-fermion cat
-fermion scratch
-fermion look
+fermion atom @ 0
+fermion cat @ 8192
+fermion scratch @ 16384
+fermion look @ 24576
 
 |cat> <- 1
 
@@ -19,18 +22,20 @@ emit "Enter를 누르면 상자를 엽니다: "
 |scratch> <- absorb
 
 # 단 한 번의 관측이 원자의 값을 정한다
-if <atom| > 0
+|scratch> <- <atom|
+
+if <atom|~1024 > 0
  |cat> <- 0
 
-if <cat|~32 > 0
+if <cat|~1024 > 0
  emit "야옹! 고양이는 살아 있습니다.\n"
 else
  emit "원자가 붕괴했습니다. 고양이는 죽었습니다.\n"
 
 emit "원자를 다시 들여다봅니다:"
 |look> <- 3
-while <look|~32 > 0
+while <look|~1024 > 0
  emit " "
- emitn <atom|~32
+ emitn <atom|~1024
  lower look
 emit "\n한 번 정해진 값은 바뀌지 않습니다.\n"

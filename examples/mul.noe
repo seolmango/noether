@@ -1,16 +1,19 @@
-# Multiplication by interference: ab = ((a+b)^2 - (a-b)^2) / 4
+# 겹침으로 곱하기: ab = ((a+b)^2 - (a-b)^2) / 4
+#
+# 함수의 메모리는 따뜻하게 시작하므로 바로 좁은 창을 쓸 수 있다.
+# ~1024로 읽는 s는 이웃이 닿지 않게 멀리 둔다.
 field seed=1
 
 path mul(a, b)
- boson p @ a               # overlaps a
- fermion s
- boson u @ s               # overlaps s
- |p> <- <b|~32             # the spot of a now reads a+b
- |s> <- <a|a>~32           # (a+b)^2
- flip p                    # the spot of a now reads a-b
- |u> <- <a|a>~32           # (a-b)^2
- flip u                    # the spot of s now reads 4ab
- return <s+768|~1024       # off-centre read: weight 256/1024 = 1/4
+ boson p @ a
+ fermion s @ 8192
+ boson u @ s
+ |p> <- <b|~64
+ |s> <- <a|a>~64
+ flip p
+ |u> <- <a|a>~64
+ flip u
+ return <s+768|~1024
 
 emit mul(6, 7)
 emit mul(-12, 12)

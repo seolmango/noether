@@ -8,34 +8,34 @@ fermion dan
 
 path mul(a, b)
  boson p @ a
- fermion s
+ fermion s @ 8192
  boson u @ s
- |p> <- <b|~32
- |s> <- <a|a>~32
+ |p> <- <b|~64
+ |s> <- <a|a>~64
  flip p
- |u> <- <a|a>~32
+ |u> <- <a|a>~64
  flip u
  return <s+768|~1024
 
 path table(d)
  fermion i
  |i> <- 1
- while <i|~32 <= 9
-    emitn <d|~32
+ while <i|~64 <= 9
+    emitn <d|~64
     emit " x "
-    emitn <i|~32
+    emitn <i|~64
     emit " = "
-    emit mul(<d|~32, <i|~32)
+    emit mul(<d|~64, <i|~64)
     raise i
 
 emit "몇 단을 볼까요? (2~9, 0이면 전부): "
 |dan> <- absorb
 
-if <dan|~32 == 0
+if <dan|~1024 == 0
  |dan> <- 2
- while <dan|~32 <= 9
-    table(<dan|~32)
+ while <dan|~1024 <= 9
+    table(<dan|~1024)
     emit "\n"
     raise dan
 else
- table(<dan|~32)
+ table(<dan|~1024)

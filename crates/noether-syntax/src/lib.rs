@@ -615,8 +615,8 @@ impl Parser {
             return Ok(0);
         }
         let w = self.uint()?;
-        if !w.is_power_of_two() || w > 1 << 32 {
-            return self.fail(format!("window ~{w} is not a power of two up to 2^32"));
+        if !w.is_power_of_two() || w > 1 << 30 {
+            return self.fail(format!("window ~{w} is not a power of two up to 2^30"));
         }
         Ok(w.trailing_zeros())
     }

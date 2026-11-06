@@ -35,7 +35,7 @@ const RT_FUNCS: [(&str, usize, bool); 22] = [
     ("noe_resolve", 1, true),
     ("noe_create", 4, false),
     ("noe_annihilate", 3, false),
-    ("noe_guard", 4, true),
+    ("noe_guard", 5, true),
     ("noe_defer", 2, false),
     ("noe_flush", 1, false),
     ("noe_emit", 1, false),
@@ -263,6 +263,25 @@ impl Gen<'_, '_> {
         Some(self.b.ins().icmp(IntCC::UnsignedLessThan, t, limit))
     }
 
+    fn warm_enough(&mut self, t: Value, lo_exp: i64) -> Option<Value> {
+        if lo_exp <= 0 {
+            return None; // every temperature is warm enough
+        }
+        let limit = self.iconst(1i64 << lo_exp.min(62));
+        Some(self.b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, t, limit))
+    }
+
+    /// The temperature of a tile, reusing what this read already loaded.
+    fn known_temp(&mut self, tile: TileRef, seen: &mut Vec<(TileRef, Value)>) -> Value {
+        if let Some((_, v)) = seen.iter().find(|(t, _)| t.same(tile)) {
+            return *v;
+        }
+        let addr = self.tile_addr(tile);
+        let t = self.cool(addr);
+        seen.push((tile, t));
+        t
+    }
+
     // ---------------------------------------------------------- reads
 
     fn global_packet_slot(&self, index: usize) -> TileRef {
@@ -403,28 +422,31 @@ impl Gen<'_, '_> {
         x: i64,
         terms: &[Term],
         shift: u32,
+        warm: &[(usize, i64)],
         friction_tile: TileRef,
         hot: Option<Value>,
     ) -> Value {
-        if terms.is_empty() {
-            return self.iconst(0);
-        }
         let mut ok = None;
         if !self.assume_cold {
+            let mut seen = Vec::new();
+            if let Some(v) = hot {
+                seen.push((friction_tile, v));
+            }
+            let tile_of = |g: &Self, packet: usize| match r.field {
+                FieldId::Frame => TileRef::Frame,
+                FieldId::Global => g.global_packet_slot(packet),
+            };
             for t in terms {
-                let tile = match r.field {
-                    FieldId::Frame => TileRef::Frame,
-                    FieldId::Global => self.global_packet_slot(t.packet),
-                };
-                let temp = match hot {
-                    Some(v) if tile.same(friction_tile) => v,
-                    _ => {
-                        let addr = self.tile_addr(tile);
-                        self.cool(addr)
-                    }
-                };
+                let tile = tile_of(self, t.packet);
+                let temp = self.known_temp(tile, &mut seen);
                 let tc = self.tc_of(r.field, t.packet);
                 let c = self.below_critical(temp, tc);
+                ok = self.and(ok, c);
+            }
+            for (packet, lo_exp) in warm {
+                let tile = tile_of(self, *packet);
+                let temp = self.known_temp(tile, &mut seen);
+                let c = self.warm_enough(temp, *lo_exp);
                 ok = self.and(ok, c);
             }
         }
@@ -432,7 +454,13 @@ impl Gen<'_, '_> {
         let k = r.k;
         self.fast_or_slow(
             ok,
-            |g| g.sum_terms(field, terms, shift),
+            |g| {
+                if terms.is_empty() {
+                    g.iconst(0)
+                } else {
+                    g.sum_terms(field, terms, shift)
+                }
+            },
             |g| {
                 let xv = g.iconst(x);
                 g.general(field, xv, k)
@@ -456,7 +484,9 @@ impl Gen<'_, '_> {
                 };
                 let hot = self.friction(tile, r.friction);
                 match &r.plan {
-                    Plan::Terms(terms, shift) => self.read_terms(r, x, terms, *shift, tile, hot),
+                    Plan::Terms(terms, shift, warm) => {
+                        self.read_terms(r, x, terms, *shift, warm, tile, hot)
+                    }
                     _ => self.general(r.field, xv, r.k),
                 }
             }
@@ -525,14 +555,14 @@ impl Gen<'_, '_> {
     fn read_lattice(
         &mut self,
         field: FieldId,
-        runs: &[usize],
+        runs: &[(usize, i64)],
         i: Value,
         x: Value,
         k: u32,
         friction: u64,
     ) -> Value {
         let hot = if friction > 0 {
-            let tile = self.element_tile(field, runs[0], i);
+            let tile = self.element_tile(field, runs[0].0, i);
             let q = self.iconst(friction as i64);
             self.heat(tile, q, None)
         } else {
@@ -540,7 +570,7 @@ impl Gen<'_, '_> {
         };
         let mut ok = None;
         if !self.assume_cold {
-            for (n, &first) in runs.iter().enumerate() {
+            for (n, &(first, lo_exp)) in runs.iter().enumerate() {
                 let temp = match hot {
                     Some(t) if n == 0 => t,
                     _ => {
@@ -551,6 +581,8 @@ impl Gen<'_, '_> {
                 let tc = self.tc_of(field, first);
                 let c = self.below_critical(temp, tc);
                 ok = self.and(ok, c);
+                let c = self.warm_enough(temp, lo_exp);
+                ok = self.and(ok, c);
             }
         }
         self.fast_or_slow(
@@ -558,7 +590,7 @@ impl Gen<'_, '_> {
             |g| {
                 let scaled = g.b.ins().ishl_imm_s(i, 4);
                 let mut acc = None;
-                for &first in runs {
+                for &(first, _) in runs {
                     let (base, off) = g.packet_ptr(field, first);
                     let at = g.b.ins().iadd(base, scaled);
                     let v = g.load(at, off);
@@ -861,22 +893,25 @@ impl Gen<'_, '_> {
         let mut ok = None;
         for g in guards {
             let c = match *g {
-                Guard::Run { first, count, tc_exp } => {
-                    if tc_exp >= 63 {
+                Guard::Run { first, count, tc_exp, lo_exp } => {
+                    if tc_exp >= 63 && lo_exp <= 0 {
                         None
                     } else {
-                        let limit = 1i64 << tc_exp.max(0);
-                        let (f, n, l) = (self.iconst(first as i64), self.iconst(count as i64),
-                                         self.iconst(limit));
+                        let hi = if tc_exp >= 63 { -1 } else { 1i64 << tc_exp.max(0) };
+                        let lo = 1i64 << lo_exp.clamp(0, 62);
+                        let (f, n) = (self.iconst(first as i64), self.iconst(count as i64));
+                        let (h, l) = (self.iconst(hi), self.iconst(lo));
                         let t = self.tick_value();
-                        let r = self.rt("noe_guard", &[f, n, l, t]).unwrap();
+                        let r = self.rt("noe_guard", &[f, n, h, l, t]).unwrap();
                         Some(self.b.ins().icmp_imm_s(IntCC::NotEqual, r, 0))
                     }
                 }
-                Guard::Frame { tc_exp } => {
+                Guard::Frame { tc_exp, lo_exp } => {
                     let tile = self.frame.unwrap();
                     let t = self.cool(tile);
-                    self.below_critical(t, tc_exp)
+                    let hot = self.below_critical(t, tc_exp);
+                    let cold = self.warm_enough(t, lo_exp);
+                    self.and(hot, cold)
                 }
             };
             ok = self.and(ok, c);
@@ -1103,10 +1138,12 @@ pub fn compile(
         let serial = g.load(state, 8);
         let serial = g.b.ins().iadd_imm_s(serial, 1);
         g.store(serial, state, 8);
-        let tmin = g.iconst(sh.cfg.tmin as i64);
+        let start = g.iconst(sh.cfg.call_temp() as i64);
         let zero = g.iconst(0);
-        g.store(tmin, frame, 0);
-        g.store(zero, frame, 8);
+        g.store(start, frame, 0);
+        let tick = g.tick_value();
+        let epoch = g.b.ins().ushr_imm_s(tick, sh.cfg.c as i64);
+        g.store(epoch, frame, 8);
         g.store(serial, frame, 16);
         if f.centres.len() <= 24 {
             for j in 0..f.centres.len() {

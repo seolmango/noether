@@ -5,30 +5,30 @@
 # 나눗셈은 겹친 변수를 반복해서 합치는 것입니다.
 field seed=1
 
-fermion op
-fermion skip
-fermion a
-fermion b
+fermion op @ 0
+fermion skip @ 2048
+fermion a @ 8192        # 타일을 나눠서 서로의 열을 받지 않는다
+fermion b @ 16384
 
 path add(x, y)
  boson p @ x
- |p> <- <y|~32
- return <x|~32
+ |p> <- <y|~64
+ return <x|~64
 
 path sub(x, y)
  boson p @ x
- |p> <- <y|~32
+ |p> <- <y|~64
  flip p
- return <x|~32
+ return <x|~64
 
 path mul(x, y)
  boson p @ x
- fermion s
+ fermion s @ 8192
  boson u @ s
- |p> <- <y|~32
- |s> <- <x|x>~32
+ |p> <- <y|~64
+ |s> <- <x|x>~64
  flip p
- |u> <- <x|x>~32
+ |u> <- <x|x>~64
  flip u
  return <s+768|~1024
 
@@ -36,33 +36,38 @@ path mul(x, y)
 path div(x, y)
  fermion q
  boson m @ x
- |m> <- <y|~32
+ |m> <- <y|~64
  flip m
- while <x|~32 >= 0
+ while <x|~64 >= 0
     fuse x m
     raise q
- return <q|~32
+ return <q|~64
 
-while <op|~32 != 113
+# 깊은 곳에서 넓은 창으로 읽으면 열이 커서 값이 흔들린다.
+# 그래서 읽기는 얕은 함수 안에서 한 번씩만 한다.
+path compute()
+ emit "왼쪽 수: "
+ |a> <- absorb
+ emit "오른쪽 수: "
+ |b> <- absorb
+ emit "결과: "
+ if <op|~256 == 43
+    emit add(<a|~1024, <b|~1024)
+ if <op|~256 == 45
+    emit sub(<a|~1024, <b|~1024)
+ if <op|~256 == 42
+    emit mul(<a|~1024, <b|~1024)
+ if <op|~256 == 47
+    if <b|~1024 == 0
+         emit "0으로 나눌 수 없습니다.\n"
+    else
+         emit div(<a|~1024, <b|~1024)
+
+while <op|~1024 != 113
  emit "연산자 (+ - * /, q는 끝): "
  |op> <- absorbc
  |skip> <- absorbc
- if <op|~32 != 113
-    emit "왼쪽 수: "
-    |a> <- absorb
-    emit "오른쪽 수: "
-    |b> <- absorb
-    emit "결과: "
-    if <op|~32 == 43
-         emit add(<a|~32, <b|~32)
-    if <op|~32 == 45
-         emit sub(<a|~32, <b|~32)
-    if <op|~32 == 42
-         emit mul(<a|~32, <b|~32)
-    if <op|~32 == 47
-         if <b|~32 == 0
-                emit "0으로 나눌 수 없습니다.\n"
-         else
-                emit div(<a|~32, <b|~32)
+ if <op|~1024 != 113
+    compute()
 
 emit "끝\n"

@@ -18,7 +18,7 @@ const EXAMPLES: [(&str, &str, &str); 8] = [
     ("숫자 맞히기", include_str!("../../../examples/guess.noe"), ""),
     ("계산기", include_str!("../../../examples/calc.noe"), ""),
     ("이름과 바이트", include_str!("../../../examples/name.noe"), ""),
-    ("과열과 냉각", include_str!("../../../examples/overheat.noe"), ""),
+    ("온도 구간", include_str!("../../../examples/overheat.noe"), ""),
     ("식으면 섞이는 변수", include_str!("../../../examples/condensate.noe"), ""),
     (
         "Brainfuck 인터프리터",

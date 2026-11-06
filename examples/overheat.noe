@@ -1,6 +1,7 @@
-# Overwriting heats memory. Past the critical
-# temperature even a wide read shakes.
-# Left alone, it cools back down.
+# 온도 구간
+#
+# ~32는 온도 1024~4095에서만 정확합니다.
+# 차가우면 값의 일부만, 뜨거우면 흔들리는 값이 읽힙니다.
 field seed=9 tau=256
 
 fermion x
@@ -8,30 +9,46 @@ fermion i @ 8192
 fermion rest @ 16384
 
 |x> <- 1000
-emit "calm: "
+emit "차가움, ~32: "
 emit <x|~32
 
-emit "overwriting x as fast as possible\n"
+emit "차가움, ~1024: "
+emit <x|~1024
+
+emit "데우는 중\n"
+|i> <- 9
+while <i|~1024 > 0
+ |x> <- -1
+ |x> <- 1000
+ lower i
+emit "알맞음, ~32: "
+emit <x|~32
+
+emit "더 달구는 중\n"
 |i> <- 60
-while <i|~32 > 0
+while <i|~1024 > 0
  |x> <- -1
  |x> <- 1000
  |x> <- -1
  |x> <- 1000
  lower i
 
-emit "hot reads:\n"
-|i> <- 12
-while <i|~32 > 0
+emit "뜨거움, ~32:\n"
+|i> <- 10
+while <i|~1024 > 0
  |x> <- 1000
  emit <x|~32
  lower i
 
-emit "resting\n"
-|rest> <- 8000
-while <rest|~32 > 0
+emit "식히는 중\n"
+|rest> <- 3000
+while <rest|~1024 > 0
+ lower rest
+ raise rest
+ lower rest
+ raise rest
  lower rest
 
 |x> <- 1000
-emit "cool again: "
+emit "다시 차가움, ~32: "
 emit <x|~32

@@ -1,15 +1,25 @@
-# 1 + 2 + ... + 10
-field hbar=16 seed=42
+# 1부터 10까지의 합
+#
+# 변수는 처음에 차갑습니다. 차가운 변수를 좁은 창으로 읽으면
+# 값의 일부만 잡히므로, 먼저 같은 타일을 데웁니다.
+field seed=42
 
-fermion total @ 0
-fermion i     @ 4096
-boson   x     @ 8192
-boson   y     @ 8192       # same centre: reading the spot gives x + y
+fermion total
+fermion i
+fermion heater
+boson   x @ 2048
+boson   y @ 2048       # 같은 자리: 읽으면 x+y
+
+# 바뀐 비트만큼 열이 난다. 온도 256 이상이면 ~64가 정확하다.
+|heater> <- -1
+|heater> <- 0
+|heater> <- -1
+|heater> <- 0
 
 |i> <- 10
-while <i|~32 > 0
- |x> <- <total|~32
- |y> <- <i|~32
- |total> <- <8192|~32
+while <i|~64 > 0
+ |x> <- <total|~64
+ |y> <- <i|~64
+ |total> <- <2048|~64
  lower i
-emit <total|~32
+emit <total|~64

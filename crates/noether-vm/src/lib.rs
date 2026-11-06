@@ -126,7 +126,6 @@ struct Vm<'a> {
     sweep: i64,
     steps: u64,
     budget: u64,
-    tmin: u64,
 }
 
 impl Vm<'_> {
@@ -207,7 +206,8 @@ impl Vm<'_> {
         let func = &program.funcs[id];
         self.serial += 1;
         let mut words = vec![0u64; 4 + func.centres.len() * 2];
-        words[0] = self.tmin;
+        words[0] = self.module.cfg.call_temp();
+        words[1] = self.tick >> self.module.cfg.c;
         words[2] = self.serial;
         let mut frame = Frame { words, index: id };
         for (i, v) in args.iter().enumerate() {
@@ -429,7 +429,6 @@ fn execute(module: &Module, program: &Program, budget: u64, tables: &mut Field) 
         sweep: 0,
         steps: 0,
         budget,
-        tmin: module.cfg.tmin,
     };
     vm.ops(&program.main);
     if let Some(film) = unsafe { (*std::ptr::addr_of_mut!(FILM)).as_mut() } {

@@ -1,14 +1,26 @@
-# Bose condensation: the same read changes its answer once the tile cools.
+# 온도에 따라 달라지는 읽기
+#
+# p와 q는 300 떨어져 있다. 따뜻하면 폭이 좁아 ~64로 p만 정확히
+# 읽힌다. 식으면 폭이 넓어져 창에 일부만 잡히고 q도 섞인다.
+# ~1024로 읽으면 전부 잡히지만 q까지 함께 읽힌다.
 field seed=7
 
 boson p @ 100000
-boson q @ 100300          # inside sigma only when cold
+boson q @ 100300
 fermion c @ 0
 
+|p> <- -1
+|p> <- 1000
+|p> <- -1
+|p> <- 1000
+|p> <- -1
 |p> <- 1000
 |q> <- 2000
-emit <p|~32               # just written, warm: 1000
+emit <p|~64       # 따뜻함: 1000
 |c> <- 3000
-while <c|~32 > 0
+while <c|~1024 > 0
  lower c
-emit <p|~32               # cold: 1000 + 2000 * 724 / 1024 = 2414
+ lower c
+ raise c
+emit <p|~64       # 식음: 일부만, 섞여서
+emit <p|~1024     # 넓은 창: 전부, 섞여서

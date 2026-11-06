@@ -14,14 +14,27 @@ pub struct Config {
     pub seed: u64,
     /// `seed=random`: draw a new seed for every run.
     pub random: bool,
-    /// Pauli spacing D = 2 * lambda.
+    /// Pauli spacing D = lambda / 2. Also the gap between auto-placed variables.
     pub spacing: i64,
+    /// Default lattice stride, 2 * lambda: elements never touch, even cold.
+    pub stride: i64,
 }
 
 impl Config {
     /// Exponent of the critical temperature for a mass, may be out of range.
     pub fn tc_exp(&self, mass: u32) -> i64 {
         2 * (self.l as i64 - self.h as i64) - mass as i64
+    }
+
+    /// Exponent of the coldest temperature at which a packet of this mass is
+    /// no wider than a window of 2^k. Below it a read catches only a part.
+    pub fn lo_exp(&self, k: u32, mass: u32) -> i64 {
+        2 * (self.l as i64 - k as i64) - mass as i64
+    }
+
+    /// The temperature a function's private memory starts at.
+    pub fn call_temp(&self) -> u64 {
+        (1u64 << (self.tc_exp(0) - 2).clamp(0, 62)).max(self.tmin)
     }
 
     /// Exponent of the widest possible packet of a mass.
@@ -109,8 +122,8 @@ fn config(program: &[Stmt]) -> Result<Config> {
         }
     }
     let (h, l) = (exponent(&cfg, "hbar")?, exponent(&cfg, "lambda")?);
-    if h > 32 || l > 32 {
-        return err(0, "lambda and hbar are limited to 2^32");
+    if h > 30 || l > 30 {
+        return err(0, "lambda and hbar are limited to 2^30");
     }
     Ok(Config {
         h,
@@ -120,11 +133,13 @@ fn config(program: &[Stmt]) -> Result<Config> {
         tmin: 1 << exponent(&cfg, "tmin")?,
         seed: cfg["seed"],
         random,
-        spacing: 2 << l,
+        spacing: (1i64 << l >> 1).max(1),
+        stride: 2 << l,
     })
 }
 
-fn declare(d: &Decl, line: usize, layout: &mut Layout, spacing: i64) -> Result<()> {
+fn declare(d: &Decl, line: usize, layout: &mut Layout, cfg: &Config) -> Result<()> {
+    let spacing = cfg.spacing;
     if layout.names.contains_key(&d.name) {
         return err(line, format!("{} declared twice", d.name));
     }
@@ -138,7 +153,7 @@ fn declare(d: &Decl, line: usize, layout: &mut Layout, spacing: i64) -> Result<(
         },
     };
     let first = layout.packets.len();
-    let stride = d.stride.unwrap_or(spacing);
+    let stride = d.stride.unwrap_or(cfg.stride);
     let count = d.count.map(|n| n as usize);
     for j in 0..count.unwrap_or(1) {
         layout.packets.push(Packet {
@@ -508,7 +523,7 @@ pub fn analyze(program: Vec<Stmt>) -> Result<Module> {
     for s in program {
         match s.kind {
             StmtKind::Decl(ref d) => {
-                declare(d, s.line, &mut global, cfg.spacing)?;
+                declare(d, s.line, &mut global, &cfg)?;
                 body.push(s);
             }
             StmtKind::Path { name, params, body } => raw_paths.push((s.line, name, params, body)),
@@ -532,11 +547,11 @@ pub fn analyze(program: Vec<Stmt>) -> Result<Module> {
                 stride: None,
                 mass: 0,
             };
-            declare(&d, line, &mut layout, cfg.spacing)?;
+            declare(&d, line, &mut layout, &cfg)?;
         }
         for s in &stmts {
             if let StmtKind::Decl(d) = &s.kind {
-                declare(d, s.line, &mut layout, cfg.spacing)?;
+                declare(d, s.line, &mut layout, &cfg)?;
             }
         }
         check_pauli(&layout, cfg.spacing)?;

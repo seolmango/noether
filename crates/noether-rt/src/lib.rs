@@ -242,10 +242,13 @@ impl Rt {
             p.clock += 1;
             self.noisy.set(self.noisy.get() + 1);
         }
-        if d == 0 {
+        // A window narrower than the packet catches only that share of it.
+        let caught = (s - k).max(0);
+        if d == 0 && caught == 0 {
             acc.whole = acc.whole.wrapping_add(p.v);
         } else {
-            acc.part += ((p.v as i128) * ((1i128 << r) - d as i128)) << (q - r);
+            let term = ((p.v as i128) * ((1i128 << r) - d as i128)) << (q - r - caught);
+            acc.part = acc.part.wrapping_add(term);
         }
     }
 
@@ -458,8 +461,8 @@ pub extern "C" fn noe_tile_at(x: i64) -> *mut Tile {
 #[no_mangle]
 pub extern "C" fn noe_read_global(x: i64, k: i64, tick: u64) -> i64 {
     let r = rt();
-    let q = k.max(r.l);
-    let reach = (1i64 << q) - 1;
+    let q = 2 * k.max(r.l);
+    let reach = (1i64 << k.max(r.l)) - 1;
     let lo = x.saturating_sub(reach);
     let hi = x.saturating_add(reach);
     let mut acc = Acc::default();
@@ -498,7 +501,7 @@ pub unsafe extern "C" fn noe_read_frame(
     tick: u64,
 ) -> i64 {
     let r = rt();
-    let q = k.max(r.l);
+    let q = 2 * k.max(r.l);
     let tile = frame as *mut Tile;
     let call_id = *frame.add(2);
     let packets = frame.add(4) as *mut Packet;
@@ -569,12 +572,12 @@ pub extern "C" fn noe_annihilate(x: i64, friction: u64, tick: u64) {
     r.sample(tile, tick, bits);
 }
 
-/// True when every packet of a static run is below its critical temperature.
+/// True when every packet of a static run is inside a temperature band.
 #[no_mangle]
-pub extern "C" fn noe_guard(first: i64, count: i64, limit: u64, tick: u64) -> i64 {
+pub extern "C" fn noe_guard(first: i64, count: i64, hi: u64, lo: u64, tick: u64) -> i64 {
     let r = rt();
     let run = &r.by_index[first as usize..(first + count) as usize];
-    run.iter().all(|tile| r.temp(*tile, tick) < limit) as i64
+    run.iter().all(|tile| (lo..hi).contains(&r.temp(*tile, tick))) as i64
 }
 
 #[no_mangle]

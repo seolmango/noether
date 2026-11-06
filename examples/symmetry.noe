@@ -1,8 +1,8 @@
-# Both symmetries. Temperature must not change inside "symmetry time".
+# 대칭 블록. 격자 간격이 넓어 ~1024가 온도와 상관없이 정확하다.
 field seed=4
 
 fermion a[4] @ 0 stride 4096
-boson   b[4] @ a stride 4096     # b[k] overlaps a[k]
+boson   b[4] @ a stride 4096     # b[k]는 a[k]와 겹친다
 fermion c[4] @ 65536 stride 4096
 boson   acc @ 131072
 boson   one @ 131072
@@ -16,12 +16,12 @@ boson   one @ 131072
 |b[2]> <- 30
 |b[3]> <- 40
 symmetry translate k in a
- |c[k]> <- <a[k]|~32               # vector add by overlap
-emit <c[0]|~32
-emit <c[3]|~32
+ |c[k]> <- <a[k]|~1024             # 겹침으로 벡터 덧셈
+emit <c[0]|~1024
+emit <c[3]|~1024
 |one> <- 5
 symmetry time
- fuse acc one                      # reversible add, no heat
+ fuse acc one                      # 되돌릴 수 있는 덧셈, 열 없음
  fuse acc one
  raise acc
-emit <acc|~32
+emit <acc|~1024
