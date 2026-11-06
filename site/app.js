@@ -113,6 +113,7 @@ function showExamples(list) {
 function load(i) {
   code.value = examples[i].source;
   preset = examples[i].input;
+  fileName = "program.noe";
 }
 
 function showCheck(r) {
@@ -142,6 +143,7 @@ code.addEventListener("keydown", (e) => {
 });
 
 $("examples").addEventListener("change", (e) => {
+  if (e.target.value === "file") return;
   load(Number(e.target.value));
   run();
 });
@@ -563,15 +565,76 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   render();
 });
 
-// On GitHub Pages the repository can be worked out from the address.
-const pages = location.hostname.match(/^(.+)\.github\.io$/);
-if (pages) {
-  const repo = location.pathname.split("/")[1];
-  const base = `https://github.com/${pages[1]}/${repo}`;
-  $("link-repo").href = base;
-  $("link-syntax").href = `${base}/blob/main/docs/syntax.md`;
-  $("links").hidden = false;
+// ---------------------------------------------------------------- files
+
+let fileName = "program.noe";
+
+function openText(name, text) {
+  fileName = name;
+  code.value = text;
+  preset = "";
+  const select = $("examples");
+  let option = select.querySelector("[data-file]");
+  if (!option) {
+    option = new Option("", "file");
+    option.dataset.file = "";
+    select.add(option, 0);
+  }
+  option.text = name;
+  select.value = "file";
+  run();
 }
+
+async function openFile(file) {
+  if (file) openText(file.name, await file.text());
+}
+
+function save() {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([code.value], { type: "text/plain" }));
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+$("open").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", (e) => {
+  openFile(e.target.files[0]);
+  e.target.value = "";
+});
+$("save").addEventListener("click", save);
+addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+    e.preventDefault();
+    save();
+  }
+});
+
+// The whole page accepts a file, so a near miss does not navigate away.
+let dragDepth = 0;
+const hasFile = (e) => [...e.dataTransfer.types].includes("Files");
+addEventListener("dragenter", (e) => {
+  if (!hasFile(e)) return;
+  dragDepth += 1;
+  $("dropzone").hidden = false;
+});
+addEventListener("dragleave", (e) => {
+  if (!hasFile(e)) return;
+  dragDepth -= 1;
+  if (dragDepth <= 0) $("dropzone").hidden = true;
+});
+addEventListener("dragover", (e) => {
+  if (hasFile(e)) e.preventDefault();
+});
+addEventListener("drop", (e) => {
+  if (!hasFile(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  $("dropzone").hidden = true;
+  openFile(e.dataTransfer.files[0]);
+});
+
+$("help").addEventListener("click", () => $("help-box").showModal());
 
 drawLegend();
 startWorker();

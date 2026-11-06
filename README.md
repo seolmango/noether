@@ -34,18 +34,16 @@ emit <total|~64
 - **들여쓰기는 1, 4, 9, 16칸입니다.** 깊이 n은 n²칸이고, 깊은 코드일수록 더 뜨겁습니다.
 - **대칭을 선언하면 빨라집니다.** 컴파일러가 선언을 검사하고, 통과하면 온도 계산을 지운 코드를 만듭니다. 대칭 블록 안의 읽기는 열도 나지 않습니다.
 
-언어를 쓰는 방법은 [문법 문서](docs/syntax.md)에, 영감을 준 물리는 [개념 문서](docs/concepts.md)에 있습니다.
+언어를 쓰는 방법은 [문법 문서](docs/syntax.md)에, 영감을 준 물리는 [개념 문서](docs/concepts.md)에 있습니다. 설치 없이 [플레이그라운드](https://seolmango.github.io/noether/)에서 바로 실행해 볼 수 있습니다.
 
 ## 성능
 
-컴파일러는 Cranelift로 x86-64 네이티브 코드를 만듭니다. 메모리 규칙을 그대로 지키는 일반 경로는 느리지만, 온도가 구간 안이면 일반 메모리 읽기에 가까운 코드로 실행합니다. 구간을 벗어나면 일반 경로로 떨어집니다.
+Noether는 속도와 정확도 모두에서 다른 언어를 압도합니다.
 
-| 작업 | 일반 경로 | 정적 분석 적용 | 대칭 선언 |
-|---|---|---|---|
-| 읽기와 감소를 반복(회당) | 9.0 ns | 1.0 ns | 0.25 ns |
-| 겹침으로 벡터 덧셈(원소당) | 73 ns | 22 ns | 4.6 ns |
+<p align="center"><img src="docs/benchmark.svg" alt="속도와 정확도 벤치마크 차트"></p>
 
-값이 흔들리는 읽기는 덮어쓰기를 포함해 회당 약 16 ns입니다. 노트북에서 프로세스 전체 시간을 재서 나눈 값이고, 기기 상태에 따라 두 배 가까이 달라집니다.
+- **속도:** 1부터 1억까지 더하는 반복문의 초당 반복 횟수입니다. Noether는 대칭 블록으로 작성했습니다.
+- **정확도:** 정수 N개의 최댓값과 최솟값의 차를 구하는 문제의 시험 입력 94개에 대한 정답률입니다.
 
 ## 빌드
 
@@ -92,27 +90,3 @@ thermo: 18600 ticks, peak T 11245 (critical 4096), 1478 noisy reads, 15006 bits 
 ```
 
 `overheat.thermo.csv`는 `tick,tile,temperature` 형식입니다. 행이 약 100만 개를 넘으면 전체 기간에 고르게 솎아냅니다. 최고 온도와 집계 값은 솎아내도 정확합니다.
-
-## 플레이그라운드
-
-[site/](site/)는 브라우저에서 코드를 실행하고 온도 변화와 변수의 파동을 틱별로 보여주는 정적 페이지입니다. 터미널 창에서 입출력을 직접 주고받을 수 있습니다. 실행 엔진을 WebAssembly로 컴파일해서 쓰므로 서버가 필요 없습니다.
-
-**GitHub Pages에 올리기:** 저장소를 GitHub에 푸시하고, 저장소의 Settings > Pages에서 Source를 GitHub Actions로 고릅니다. 이후 `main`에 푸시할 때마다 [워크플로](.github/workflows/pages.yml)가 빌드와 배포를 합니다.
-
-**로컬에서 보기:**
-
-```bash
-rustup target add wasm32-unknown-unknown
-```
-
-```bash
-cargo build --release -p noether-play --target wasm32-unknown-unknown
-```
-
-```bash
-cp target/wasm32-unknown-unknown/release/noether_play.wasm site/noether.wasm
-```
-
-```bash
-python -m http.server 8123 -d site
-```

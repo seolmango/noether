@@ -79,8 +79,10 @@ button { padding: 0 16px; cursor: pointer; }
 button:disabled { opacity: .45; cursor: default; }
 
 nav { display: flex; gap: 16px; margin-left: auto; }
-nav a { color: var(--soft); text-decoration: none; }
-nav a:hover { color: var(--ink); }
+nav { align-items: center; }
+nav a, button.link { color: var(--soft); text-decoration: none; }
+nav a:hover, button.link:hover { color: var(--ink); }
+button.link { height: auto; padding: 0; background: none; border: 0; }
 
 main {
   display: grid;
@@ -128,6 +130,36 @@ main {
   resize: none;
   font: inherit;
 }
+
+.dropzone {
+  position: absolute;
+  inset: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--cold);
+  background: color-mix(in srgb, var(--paper) 85%, transparent);
+  border: 2px dashed var(--cold);
+  border-radius: 6px;
+  font-family: "IBM Plex Sans KR", sans-serif;
+  pointer-events: none;
+}
+
+dialog {
+  max-width: 560px;
+  max-height: 85vh;
+  padding: 20px 24px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+dialog::backdrop { background: rgb(0 0 0 / .35); }
+dialog h2 { margin: 0 0 8px; font-size: 18px; font-weight: 500; }
+dialog h3 { margin: 16px 0 2px; font-size: 14px; font-weight: 500; }
+dialog p { margin: 4px 0; }
+dialog code { font: 400 13px "IBM Plex Mono", monospace; }
+dialog form { margin-top: 16px; text-align: right; }
 
 #verdict {
   margin: 0;
@@ -243,6 +275,7 @@ main {
   header { flex-wrap: wrap; }
   select { flex: 1; }
   nav { order: 1; width: 100%; margin: 0; }
+  dialog { width: calc(100% - 32px); }
   main { display: block; }
   .source { border-right: 0; border-bottom: 1px solid var(--line); }
   .editor { flex: none; height: 48vh; }

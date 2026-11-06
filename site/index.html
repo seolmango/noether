@@ -19,9 +19,13 @@
   <select id="examples"></select>
   <button id="run" disabled>실행</button>
   <button id="stop" hidden>중지</button>
-  <nav id="links" hidden>
-    <a id="link-syntax">문법</a>
-    <a id="link-repo">소스 코드</a>
+  <button id="open">열기</button>
+  <button id="save">저장</button>
+  <input id="file" type="file" accept=".noe,.txt,text/plain" hidden>
+  <nav>
+    <button id="help" class="link">도움말</button>
+    <a id="link-syntax" href="https://github.com/seolmango/noether/blob/main/docs/syntax.md">문법</a>
+    <a id="link-repo" href="https://github.com/seolmango/noether">소스 코드</a>
   </nav>
 </header>
 
@@ -30,6 +34,7 @@
     <div class="editor">
       <div class="levels" aria-hidden="true"><i style="--n:1"></i><i style="--n:4"></i><i style="--n:9"></i><i style="--n:16"></i><i style="--n:25"></i></div>
       <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Noether 소스 코드"></textarea>
+      <div class="dropzone" id="dropzone" hidden>여기에 놓으면 파일을 엽니다</div>
     </div>
     <p id="verdict" role="status" hidden></p>
   </section>
@@ -59,6 +64,19 @@
     </section>
   </section>
 </main>
+<dialog id="help-box" aria-labelledby="help-title">
+  <h2 id="help-title">도움말</h2>
+  <h3>파일</h3>
+  <p>.noe 파일을 편집기로 끌어다 놓거나 열기를 누르면 불러옵니다. 저장이나 Ctrl+S를 누르면 지금 코드를 내려받습니다.</p>
+  <h3>터미널</h3>
+  <p>프로그램이 입력을 읽으려 하면 터미널에 커서가 나타납니다. Enter로 한 줄을 보내고, Ctrl+D로 입력을 끝냅니다. 입력이 늘 때마다 프로그램을 처음부터 다시 실행합니다. 같은 입력이면 결과가 같아서 이어서 실행되는 것처럼 보입니다. <code>seed=random</code> 프로그램은 실행을 누를 때 시드를 뽑아 그 실행이 끝날 때까지 유지합니다.</p>
+  <h3>온도와 파동</h3>
+  <p>온도 보기는 메모리 타일별 온도입니다. 빗금은 임계 온도를 넘은 구간입니다.</p>
+  <p>파동 보기는 슬라이더로 틱을 옮기거나 재생할 수 있습니다. 삼각형의 높이는 값, 폭은 변수 폭, 색은 온도이고, 진한 선은 각 지점의 합입니다. 멀리 떨어진 변수 사이의 간격은 줄여서 그립니다. 전역 변수를 최대 48개까지 보여 주고, 함수의 지역 변수와 <code>create</code>로 만든 변수는 나오지 않습니다.</p>
+  <h3>브라우저 한도</h3>
+  <p>실행 문장은 6천만 개, 출력은 1MiB, 온도 기록은 4만 행까지입니다. 재귀 깊이는 브라우저 스택에 달렸습니다. 한도 외의 동작은 컴파일한 프로그램과 같습니다. 코드는 내 브라우저 안에서만 실행됩니다.</p>
+  <form method="dialog"><button>닫기</button></form>
+</dialog>
 <script src="app.js" type="module"></script>
 </body>
 </html>
