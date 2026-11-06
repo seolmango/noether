@@ -1,0 +1,6 @@
+target/
+*.obj
+*.exe
+*.pdb
+__pycache__/
+site/noether.wasm

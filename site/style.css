@@ -1,0 +1,267 @@
+:root {
+  color-scheme: light dark;
+  --frost: #e6eef3;
+  --ice: #f5f9fb;
+  --glass: #c7d7e0;
+  --ink: #12304a;
+  --ink-soft: #4a6578;
+  --cold: #1f6f9f;
+  /* Heat belongs to the data alone; no chrome uses these. */
+  --heat-0: #dfe9ef;
+  --heat-1: #f0a58f;
+  --heat-2: #b3123f;
+  --heat-over: #3a0418;
+  --level: rgb(31 111 159 / .16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --frost: #0d1b27;
+    --ice: #13242f;
+    --glass: #2a4252;
+    --ink: #dcebf3;
+    --ink-soft: #92acbb;
+    --cold: #7cc0e6;
+    --heat-0: #182c39;
+    --heat-1: #a8384f;
+    --heat-2: #ff8f70;
+    --heat-over: #fff1d6;
+    --level: rgb(124 192 230 / .16);
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--frost);
+  color: var(--ink);
+  font: 400 15px/1.6 "IBM Plex Sans KR", system-ui, sans-serif;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+:focus-visible { outline: 2px solid var(--cold); outline-offset: 2px; }
+
+.masthead {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 8px 28px;
+  padding: 22px 28px 14px;
+}
+
+.mark {
+  margin: 0;
+  font: italic 500 40px/1 "STIX Two Text", serif;
+  letter-spacing: -.01em;
+}
+
+.mark span { font-style: normal; color: var(--cold); }
+
+.tagline { margin: 0; max-width: 62ch; color: var(--ink-soft); }
+
+.links { display: flex; gap: 18px; }
+.links a { color: var(--cold); }
+
+.bench {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 28px;
+  padding: 0 28px 28px;
+}
+
+.bar { display: flex; gap: 8px; margin-bottom: 8px; }
+.picker { flex: 1; min-width: 0; }
+
+select, button, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+select {
+  width: 100%;
+  height: 38px;
+  padding: 0 8px;
+  background: var(--ice);
+  border: 1px solid var(--glass);
+  border-radius: 3px;
+}
+
+button {
+  height: 38px;
+  padding: 0 18px;
+  background: var(--ice);
+  border: 1px solid var(--glass);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--ice);
+  font-weight: 600;
+}
+
+button:disabled { opacity: .45; cursor: default; }
+
+button.quiet { height: 28px; padding: 0 10px; margin-left: auto; font-size: 13px; }
+
+.editor {
+  position: relative;
+  height: min(58vh, 560px);
+  background: var(--ice);
+  border: 1px solid var(--glass);
+  border-radius: 3px;
+  overflow: hidden;
+  --ch: .6em;
+  --pad: 14px;
+  font: 400 14px/1.6 "IBM Plex Mono", ui-monospace, monospace;
+}
+
+/* The energy levels: columns where an indented line may legally begin. */
+.levels i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--pad) + var(--n) * var(--ch) - 1px);
+  width: 1px;
+  background: var(--level);
+}
+
+#code {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 12px var(--pad);
+  background: transparent;
+  border: 0;
+  resize: none;
+  outline-offset: -2px;
+  font: inherit;
+  tab-size: 1;
+}
+
+.verdict {
+  min-height: 1.6em;
+  margin: 6px 0 2px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.verdict.bad { color: var(--ink); font-weight: 500; }
+
+details { margin-top: 6px; }
+summary { cursor: pointer; color: var(--ink-soft); }
+
+#input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--ice);
+  border: 1px solid var(--glass);
+  border-radius: 3px;
+  font: 400 13px/1.5 "IBM Plex Mono", monospace;
+  resize: vertical;
+}
+
+.cheat dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 8px 0 0;
+}
+
+.cheat dd { margin: 0; color: var(--ink-soft); }
+code { font: 400 13px "IBM Plex Mono", monospace; }
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 36px;
+  margin: 0 0 16px;
+}
+
+.readout dt { color: var(--ink-soft); font-size: 13px; }
+
+.readout dd {
+  margin: 0;
+  font: 500 26px/1.2 "STIX Two Text", serif;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.thermogram { margin: 0; }
+
+.thermogram figcaption { margin-bottom: 6px; font-weight: 500; }
+
+.plot { position: relative; }
+
+#heat {
+  display: block;
+  width: 100%;
+  height: 250px;
+  cursor: crosshair;
+}
+
+.tip {
+  position: absolute;
+  z-index: 2;
+  min-width: 150px;
+  padding: 6px 10px;
+  background: var(--ink);
+  color: var(--ice);
+  border-radius: 3px;
+  font-size: 13px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.scale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+#legend { width: 140px; height: 10px; }
+
+.over {
+  width: 14px;
+  height: 10px;
+  margin-left: 8px;
+  background: repeating-linear-gradient(45deg, var(--heat-over) 0 2px, var(--heat-2) 2px 4px);
+}
+
+.console h2 { margin: 18px 0 6px; font-size: 15px; font-weight: 500; }
+
+#output {
+  height: 170px;
+  margin: 0;
+  padding: 10px 14px;
+  overflow: auto;
+  background: var(--ice);
+  border: 1px solid var(--glass);
+  border-radius: 3px;
+  font: 400 13px/1.55 "IBM Plex Mono", monospace;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .masthead { grid-template-columns: 1fr; padding: 16px 16px 10px; }
+  .bench { grid-template-columns: minmax(0, 1fr); padding: 0 16px 16px; gap: 20px; }
+  .editor { height: 46vh; }
+  .readout { gap: 6px 24px; }
+  .readout dd { font-size: 22px; }
+}

@@ -1,0 +1,22 @@
+# Observable physics: sharp reads disturb, cold bosons merge, heat localizes.
+field seed=7
+
+fermion v @ 0
+boson   p @ 100000
+boson   q @ 100300            # 300 apart: inside sigma when cold
+
+|v> <- 1000
+emit "wide reads: "
+emit <v|~32
+emit <v|~32
+emit "sharp reads: "
+emit <v|
+emit <v|
+emit <v|
+emit "after sharp reads, wide read: "
+emit <v|~32
+
+|p> <- 1000
+|q> <- 2000
+emit "cold, read at p: "
+emit <p|~32

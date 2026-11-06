@@ -1,0 +1,13 @@
+[package]
+name = "noether-play"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+noether-syntax = { path = "../noether-syntax" }
+noether-sema = { path = "../noether-sema" }
+noether-rt = { path = "../noether-rt" }
+noether-vm = { path = "../noether-vm" }

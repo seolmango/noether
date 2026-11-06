@@ -1,0 +1,14 @@
+# Bose condensation: the same read changes its answer once the tile cools.
+field seed=7
+
+boson p @ 100000
+boson q @ 100300          # inside sigma only when cold
+fermion c @ 0
+
+|p> <- 1000
+|q> <- 2000
+emit <p|~32               # just written, warm: 1000
+|c> <- 3000
+while <c|~32 > 0
+ lower c
+emit <p|~32               # cold: 1000 + 2000 * 724 / 1024 = 2414

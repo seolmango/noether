@@ -1,0 +1,12 @@
+[package]
+name = "noetherc"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+noether-syntax = { path = "../noether-syntax" }
+noether-sema = { path = "../noether-sema" }
+noether-nir = { path = "../noether-nir" }
+noether-codegen = { path = "../noether-codegen" }
+noether-vm = { path = "../noether-vm" }
+cc = "1"

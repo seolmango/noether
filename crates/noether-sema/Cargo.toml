@@ -1,0 +1,7 @@
+[package]
+name = "noether-sema"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+noether-syntax = { path = "../noether-syntax" }

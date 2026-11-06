@@ -1,0 +1,55 @@
+# A Brainfuck interpreter in Noether: the Turing-completeness witness.
+# stdin: the program, then a '!' byte, then the program's input.
+field seed=5 tau=64
+
+fermion code[512] @ 0 stride 4096
+fermion tape[256] @ 4194304 stride 4096
+fermion pc @ 8388608
+fermion dp @ 8392704
+fermion n  @ 8396800
+fermion ch @ 8400896
+fermion depth @ 8404992
+
+|ch> <- absorbc
+while <ch|~32 != 33
+ if <ch|~32 < 0
+    |ch> <- 33
+ else
+    |code[<n|~32]> <- <ch|~32
+    raise n
+    |ch> <- absorbc
+
+|dp> <- 0
+while <pc|~32 < <n|~32
+ |ch> <- <code[<pc|~32]|~32
+ if <ch|~32 == 43
+    raise tape[<dp|~32]
+ if <ch|~32 == 45
+    lower tape[<dp|~32]
+ if <ch|~32 == 62
+    raise dp
+ if <ch|~32 == 60
+    lower dp
+ if <ch|~32 == 46
+    emitc <tape[<dp|~32]|~32
+ if <ch|~32 == 44
+    |tape[<dp|~32]> <- absorbc
+ if <ch|~32 == 91
+    if <tape[<dp|~32]|~32 == 0
+         |depth> <- 1
+         while <depth|~32 > 0
+                raise pc
+                if <code[<pc|~32]|~32 == 91
+                         raise depth
+                if <code[<pc|~32]|~32 == 93
+                         lower depth
+ if <ch|~32 == 93
+    if <tape[<dp|~32]|~32 != 0
+         |depth> <- 1
+         while <depth|~32 > 0
+                lower pc
+                if <code[<pc|~32]|~32 == 93
+                         raise depth
+                if <code[<pc|~32]|~32 == 91
+                         lower depth
+ raise pc

@@ -1,0 +1,24 @@
+# Recursion. Every path call is a closed system with its own private field.
+field seed=2
+
+path mul(a, b)
+ boson p @ a
+ fermion s
+ boson u @ s
+ |p> <- <b|~32
+ |s> <- <a|a>~32
+ flip p
+ |u> <- <a|a>~32
+ flip u
+ return <s+768|~1024
+
+path fact(n)
+ if <n|~32 <= 1
+    return 1
+ fermion m
+ |m> <- <n|~32
+ lower m
+ return mul(<n|~32, fact(<m|~32))
+
+emit fact(10)
+emit fact(15)

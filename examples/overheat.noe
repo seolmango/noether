@@ -1,0 +1,37 @@
+# Overwriting heats memory. Past the critical
+# temperature even a wide read shakes.
+# Left alone, it cools back down.
+field seed=9 tau=256
+
+fermion x
+fermion i @ 8192
+fermion rest @ 16384
+
+|x> <- 1000
+emit "calm: "
+emit <x|~32
+
+emit "overwriting x as fast as possible\n"
+|i> <- 60
+while <i|~32 > 0
+ |x> <- -1
+ |x> <- 1000
+ |x> <- -1
+ |x> <- 1000
+ lower i
+
+emit "hot reads:\n"
+|i> <- 12
+while <i|~32 > 0
+ |x> <- 1000
+ emit <x|~32
+ lower i
+
+emit "resting\n"
+|rest> <- 8000
+while <rest|~32 > 0
+ lower rest
+
+|x> <- 1000
+emit "cool again: "
+emit <x|~32

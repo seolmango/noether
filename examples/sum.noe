@@ -1,0 +1,15 @@
+# 1 + 2 + ... + 10
+field hbar=16 seed=42
+
+fermion total @ 0
+fermion i     @ 4096
+boson   x     @ 8192
+boson   y     @ 8192       # same centre: reading the spot gives x + y
+
+|i> <- 10
+while <i|~32 > 0
+ |x> <- <total|~32
+ |y> <- <i|~32
+ |total> <- <8192|~32
+ lower i
+emit <total|~32

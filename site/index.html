@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noether 플레이그라운드</title>
+<meta name="description" content="변수가 파동이고 메모리에 온도가 있는 프로그래밍 언어를 브라우저에서 실행합니다.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="masthead">
+  <h1 class="mark" aria-label="Noether"><span>⟨</span>noether<span>|</span></h1>
+  <p class="tagline">변수는 파동이고, 메모리에는 온도가 있습니다. 자주 덮어쓰면 뜨거워지고, 뜨거워지면 값이 흔들립니다.</p>
+  <nav class="links" id="links" hidden>
+    <a id="link-syntax">문법</a>
+    <a id="link-concepts">개념</a>
+    <a id="link-repo">소스 코드</a>
+  </nav>
+</header>
+
+<main class="bench">
+  <section class="source" aria-label="코드">
+    <div class="bar">
+      <label class="picker">
+        <span class="sr">예제</span>
+        <select id="examples"></select>
+      </label>
+      <button id="run" class="primary" disabled>실행</button>
+      <button id="stop" hidden>중지</button>
+    </div>
+    <div class="editor">
+      <div class="levels" aria-hidden="true"><i style="--n:1"></i><i style="--n:4"></i><i style="--n:9"></i><i style="--n:16"></i><i style="--n:25"></i></div>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Noether 소스 코드"></textarea>
+    </div>
+    <p class="verdict" id="verdict" role="status"></p>
+    <details class="stdin">
+      <summary>표준 입력</summary>
+      <textarea id="input" rows="3" spellcheck="false" aria-label="프로그램에 줄 표준 입력"></textarea>
+    </details>
+    <details class="cheat">
+      <summary>문법 요약</summary>
+      <dl>
+        <dt><code>fermion x</code></dt><dd>변수를 만듭니다. 서로 겹칠 수 없습니다.</dd>
+        <dt><code>boson y @ x</code></dt><dd>x와 같은 자리에 겹치는 변수를 만듭니다.</dd>
+        <dt><code>|x&gt; &lt;- 5</code></dt><dd>값을 덮어씁니다. 지운 비트만큼 열이 납니다.</dd>
+        <dt><code>&lt;x|~32</code></dt><dd>폭 32 창으로 읽습니다. 창이 좁을수록 값이 흔들립니다.</dd>
+        <dt><code>raise x</code>, <code>lower x</code></dt><dd>값을 1 올리고 내립니다. 열이 나지 않습니다.</dd>
+        <dt>들여쓰기</dt><dd>깊이 n은 n²칸입니다. 1, 4, 9, 16칸. 편집기의 세로선이 그 위치입니다.</dd>
+      </dl>
+    </details>
+  </section>
+
+  <section class="result" aria-label="실행 결과">
+    <dl class="readout" id="readout">
+      <div><dt>틱</dt><dd id="r-ticks">0</dd></div>
+      <div><dt>최고 온도</dt><dd id="r-peak">0</dd></div>
+      <div><dt>임계 온도</dt><dd id="r-critical">0</dd></div>
+      <div><dt>흔들린 읽기</dt><dd id="r-noisy">0</dd></div>
+      <div><dt>지운 비트</dt><dd id="r-erased">0</dd></div>
+    </dl>
+
+    <figure class="thermogram">
+      <figcaption>메모리 타일별 온도 변화</figcaption>
+      <div class="plot" id="plot">
+        <canvas id="heat" tabindex="0" aria-label="타일별 시간에 따른 온도 열화상도"></canvas>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+      <div class="scale">
+        <span>차가움</span>
+        <canvas id="legend" width="240" height="12" aria-hidden="true"></canvas>
+        <span>임계</span>
+        <i class="over" aria-hidden="true"></i>
+        <span>임계 초과</span>
+        <button id="csv" class="quiet" disabled>CSV 저장</button>
+      </div>
+    </figure>
+
+    <div class="console">
+      <h2>출력</h2>
+      <pre id="output" tabindex="0"></pre>
+    </div>
+  </section>
+</main>
+<script src="app.js" type="module"></script>
+</body>
+</html>
