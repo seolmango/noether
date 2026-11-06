@@ -1,31 +1,47 @@
 # 슈뢰딩거의 고양이
 #
-# 고양이와 독약은 같은 타일, 즉 같은 상자에 있습니다.
-# 독약을 덮어쓸수록 상자가 뜨거워지고, 임계 온도를
-# 넘으면 들여다볼 때마다 고양이의 값이 흔들립니다.
-# 흔든 횟수를 바꿔 보면서 온도 그래프를 보세요.
-field tau=1024 seed=11
+# 상자 안의 원자가 붕괴하면 독이 퍼져 고양이가 죽습니다.
+# 원자의 값은 아직 아무도 정하지 않았습니다.
+# 날카로운 읽기가 그 값을 무작위로 정하고, 정해진 값은
+# 변수에 남습니다. 그래서 상자를 여는 순간 운명이 갈리고,
+# 그 뒤로는 몇 번을 봐도 같습니다.
+#
+# 같은 시드면 결과도 같으므로, 평행우주마다 다른 원자를
+# 씁니다. 노이즈는 주소마다 독립입니다.
+field seed=11
 
-fermion cat @ 0
-fermion poison @ 2048
-fermion shakes @ 8192
-fermion seen @ 12288
+fermion atom[256]
+fermion cat
+fermion universe
+fermion scratch
+fermion look
 
-emit "상자를 몇 번 흔들까요? (10, 100, 1000): "
-|shakes> <- absorb
 |cat> <- 1
 
-while <shakes|~32 > 0
- |poison> <- -1
- |poison> <- 0
- |seen> <- <cat|~32
- lower shakes
+emit "평행우주를 고르세요 (0~255): "
+|universe> <- absorb
+while <universe|~32 > 255
+ lower universe
+while <universe|~32 < 0
+ raise universe
 
-|seen> <- <cat|~32
+emit "상자가 닫혀 있습니다. 고양이의 운명은 아직 정해지지 않았습니다.\n"
+emit "Enter를 누르면 상자를 엽니다: "
+|scratch> <- absorb
 
-emit "관측값: "
-emit <seen|~32
-if <seen|~32 > 0
+# 단 한 번의 관측이 원자의 값을 정한다
+if <atom[<universe|~32]| > 0
+ |cat> <- 0
+
+if <cat|~32 > 0
  emit "야옹! 고양이는 살아 있습니다.\n"
 else
- emit "고양이는 죽었습니다.\n"
+ emit "원자가 붕괴했습니다. 고양이는 죽었습니다.\n"
+
+emit "원자를 다시 들여다봅니다:"
+|look> <- 3
+while <look|~32 > 0
+ emit " "
+ emitn <atom[<universe|~32]|~32
+ lower look
+emit "\n한 번 정해진 값은 바뀌지 않습니다.\n"

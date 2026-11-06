@@ -112,15 +112,22 @@ fn guessing_every_number_finds_the_secret() {
 }
 
 #[test]
-fn the_cat_survives_a_cold_box_and_shaking_decides_a_hot_one() {
-    let fate = |shakes: &str| {
-        let input = format!("{shakes}\n");
+fn the_cat_is_decided_by_opening_the_box_and_stays_decided() {
+    let open = |universe: u32| {
+        let input = format!("{universe}\n\n");
         let out = feed(Command::new(NOETHERC).arg(example("cat")).arg("--run"), &input);
-        String::from_utf8_lossy(&out.stdout).contains("살아 있습니다")
+        String::from_utf8_lossy(&out.stdout).into_owned()
     };
-    assert!(fate("5"));
-    assert!(!fate("50"));
-    assert!(fate("100"));
+    let mut alive = 0;
+    for universe in 0..40 {
+        let text = open(universe);
+        alive += text.contains("살아 있습니다") as u32;
+        let looks = text.split("들여다봅니다:").nth(1).unwrap().lines().next().unwrap();
+        let values: Vec<&str> = looks.split_whitespace().collect();
+        assert_eq!(values.len(), 3);
+        assert!(values.iter().all(|v| *v == values[0]), "{text}");
+    }
+    assert!((10..=30).contains(&alive), "{alive} of 40 survived");
 }
 
 #[test]
