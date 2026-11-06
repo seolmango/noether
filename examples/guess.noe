@@ -1,0 +1,36 @@
+# 숫자 맞히기
+#
+# 난수 함수는 없지만 날카로운 읽기는 값을 흔듭니다.
+# 비밀 숫자를 일부러 여러 번 날카롭게 읽어서 섞습니다.
+field seed=2024
+
+fermion secret
+fermion n @ 8192
+fermion guess @ 16384
+fermion tries @ 24576
+
+emit "아무 숫자나 입력하면 비밀 숫자를 섞습니다: "
+|n> <- absorb
+|secret> <- 50
+while <n|~32 > 0
+ |guess> <- <secret|
+ lower n
+
+while <secret|~32 < 1
+ raise secret
+while <secret|~32 > 100
+ lower secret
+
+|guess> <- 0
+while <guess|~32 != <secret|~32
+ emit "1~100 사이 숫자: "
+ |guess> <- absorb
+ raise tries
+ if <guess|~32 < <secret|~32
+    emit "더 큰 수입니다.\n"
+ if <guess|~32 > <secret|~32
+    emit "더 작은 수입니다.\n"
+
+emit "정답! "
+emitn <tries|~32
+emit "번 만에 맞혔습니다.\n"

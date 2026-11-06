@@ -12,12 +12,13 @@ use std::fmt::Write;
 
 const SAMPLES: usize = 40_000;
 
-const EXAMPLES: [(&str, &str, &str); 7] = [
+const EXAMPLES: [(&str, &str, &str); 8] = [
+    ("슈뢰딩거의 고양이", include_str!("../../../examples/cat.noe"), ""),
+    ("구구단", include_str!("../../../examples/gugudan.noe"), ""),
+    ("숫자 맞히기", include_str!("../../../examples/guess.noe"), ""),
+    ("계산기", include_str!("../../../examples/calc.noe"), ""),
+    ("이름과 바이트", include_str!("../../../examples/name.noe"), ""),
     ("과열과 냉각", include_str!("../../../examples/overheat.noe"), ""),
-    ("합 구하기", include_str!("../../../examples/sum.noe"), ""),
-    ("겹침으로 곱하기", include_str!("../../../examples/mul.noe"), ""),
-    ("재귀 팩토리얼", include_str!("../../../examples/fact.noe"), ""),
-    ("격자 정렬", include_str!("../../../examples/sort.noe"), ""),
     ("식으면 섞이는 변수", include_str!("../../../examples/condensate.noe"), ""),
     (
         "Brainfuck 인터프리터",
@@ -114,14 +115,23 @@ pub unsafe extern "C" fn check(src: *const u8, n: usize) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn run(src: *const u8, n: usize, input: *const u8, m: usize, budget: f64) {
+pub unsafe extern "C" fn run(
+    src: *const u8,
+    n: usize,
+    input: *const u8,
+    m: usize,
+    budget: f64,
+    interactive: i32,
+) {
     let source = text(src, n);
     let stdin = std::slice::from_raw_parts(input, m).to_vec();
     match analyze(&source) {
         Err(e) => ERROR = Some((e.line, e.msg)),
         Ok(module) => {
             MODULE = Some(module);
-            let tick = noether_vm::run_embedded(MODULE.as_ref().unwrap(), budget as u64, stdin, SAMPLES);
+            let module = MODULE.as_ref().unwrap();
+            let tick =
+                noether_vm::run_embedded(module, budget as u64, stdin, SAMPLES, interactive != 0);
             TICK = Some(tick);
         }
     }
@@ -152,6 +162,7 @@ pub unsafe extern "C" fn finish() {
     let module = MODULE.as_ref().unwrap();
     let (status, message) = match &s.trap {
         Some(m) if m.contains("step budget") => ("budget", m.clone()),
+        Some(m) if m == rt::WAITING => ("input", String::new()),
         Some(m) => ("trap", m.clone()),
         None => ("ok", String::new()),
     };

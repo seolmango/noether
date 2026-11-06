@@ -107,6 +107,7 @@ pub enum StmtKind {
     SymTranslate { index: String, lattice: String, body: Vec<Stmt> },
     Emit(Value),
     EmitC(Value),
+    EmitN(Value),
     EmitS(Vec<u8>),
     Return(Value),
     CallStmt(Value),
@@ -466,7 +467,7 @@ impl Parser {
                 self.eol()?;
                 Ok(if word == "swap" { StmtKind::Swap(a, b) } else { StmtKind::Fuse(a, b) })
             }
-            "emit" | "emitc" => {
+            "emit" | "emitc" | "emitn" => {
                 self.p += 1;
                 if word == "emit" {
                     if let Tok::Str(s) = self.peek(0).clone() {
@@ -477,7 +478,11 @@ impl Parser {
                 }
                 let v = self.value()?;
                 self.eol()?;
-                Ok(if word == "emit" { StmtKind::Emit(v) } else { StmtKind::EmitC(v) })
+                Ok(match word.as_str() {
+                    "emit" => StmtKind::Emit(v),
+                    "emitc" => StmtKind::EmitC(v),
+                    _ => StmtKind::EmitN(v),
+                })
             }
             "return" => {
                 self.p += 1;

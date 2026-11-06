@@ -32,7 +32,8 @@ self.onmessage = async ({ data }) => {
     self.postMessage({ kind: "check", id: data.id, value: result(wasm) });
   } else {
     try {
-      wasm.run(...put(wasm, data.source), ...put(wasm, data.input), BUDGET);
+      wasm.run(...put(wasm, data.source), ...put(wasm, data.input), BUDGET,
+               data.interactive ? 1 : 0);
     } catch {
       // A trap or a stack overflow. `finish` reports what happened.
     }

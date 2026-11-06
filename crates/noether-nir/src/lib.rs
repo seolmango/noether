@@ -114,6 +114,7 @@ pub enum Op {
     Symmetric(Symmetric),
     Emit(Expr),
     EmitC(Expr),
+    EmitN(Expr),
     EmitS(Vec<u8>),
     Return(Expr),
     Eval(Expr),
@@ -441,6 +442,7 @@ impl<'a> Lower<'a> {
             }
             Emit(v) => Op::Emit(self.value(v, lv)),
             EmitC(v) => Op::EmitC(self.value(v, lv)),
+            EmitN(v) => Op::EmitN(self.value(v, lv)),
             EmitS(b) => Op::EmitS(b.clone()),
             Return(v) => Op::Return(self.value(v, lv)),
             CallStmt(v) => Op::Eval(self.value(v, lv)),

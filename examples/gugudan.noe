@@ -1,0 +1,41 @@
+# 구구단
+#
+# 곱셈 연산자가 없어서 겹침과 제곱으로 곱합니다.
+# ab = ((a+b)^2 - (a-b)^2) / 4
+field seed=1
+
+fermion dan
+
+path mul(a, b)
+ boson p @ a
+ fermion s
+ boson u @ s
+ |p> <- <b|~32
+ |s> <- <a|a>~32
+ flip p
+ |u> <- <a|a>~32
+ flip u
+ return <s+768|~1024
+
+path table(d)
+ fermion i
+ |i> <- 1
+ while <i|~32 <= 9
+    emitn <d|~32
+    emit " x "
+    emitn <i|~32
+    emit " = "
+    emit mul(<d|~32, <i|~32)
+    raise i
+
+emit "몇 단을 볼까요? (2~9, 0이면 전부): "
+|dan> <- absorb
+
+if <dan|~32 == 0
+ |dan> <- 2
+ while <dan|~32 <= 9
+    table(<dan|~32)
+    emit "\n"
+    raise dan
+else
+ table(<dan|~32)

@@ -276,13 +276,13 @@ impl Checker<'_> {
         }
         let forbidden_in_time = matches!(
             s.kind,
-            Write(..) | Emit(_) | EmitC(_) | EmitS(_) | Create(..) | Annihilate(_) | Return(_)
+            Write(..) | Emit(_) | EmitC(_) | EmitN(_) | EmitS(_) | Create(..) | Annihilate(_) | Return(_)
                 | CallStmt(_) | SymTranslate { .. }
         );
         let forbidden_in_sweep = matches!(
             s.kind,
-            Emit(_) | EmitC(_) | EmitS(_) | Create(..) | Annihilate(_) | Return(_) | CallStmt(_)
-                | While(..) | SymTime(_) | SymTranslate { .. }
+            Emit(_) | EmitC(_) | EmitN(_) | EmitS(_) | Create(..) | Annihilate(_) | Return(_)
+                | CallStmt(_) | While(..) | SymTime(_) | SymTranslate { .. }
         );
         match sym {
             Sym2::Time if forbidden_in_time => {
@@ -333,7 +333,7 @@ impl Checker<'_> {
                     None => self.local.remove(index),
                 };
             }
-            Emit(v) | EmitC(v) | Return(v) | CallStmt(v) => self.value(v, ln)?,
+            Emit(v) | EmitC(v) | EmitN(v) | Return(v) | CallStmt(v) => self.value(v, ln)?,
             Create(_, v) => {
                 self.has_create = true;
                 self.value(v, ln)?;

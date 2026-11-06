@@ -80,6 +80,8 @@ struct Rt {
     input: Box<dyn BufRead>,
     /// Embedded in a host: traps unwind to it instead of ending the process.
     embedded: bool,
+    /// Embedded and stopping at the end of input rather than reading EOF.
+    interactive: bool,
     noisy: std::cell::Cell<u64>,
     thermo: Option<Thermo>,
     tile_ids: HashMap<*mut Tile, i64>,
@@ -333,6 +335,7 @@ pub unsafe extern "C" fn noe_init(
         out: Box::new(std::io::BufWriter::with_capacity(1 << 16, std::io::stdout())),
         input: Box::new(std::io::BufReader::new(std::io::stdin())),
         embedded: false,
+        interactive: false,
         noisy: std::cell::Cell::new(0),
         thermo: None,
         tile_ids,
@@ -389,8 +392,9 @@ pub fn heat(tile: *mut Tile, q: u64, tick: u64) {
 }
 
 /// Switches I/O to memory and makes traps panic. Call right after `noe_init`.
-pub fn embed(input: Vec<u8>) {
+pub fn embed(input: Vec<u8>, interactive: bool) {
     let r = rt();
+    r.interactive = interactive;
     r.out = Box::new(Capture);
     r.input = Box::new(std::io::Cursor::new(input));
     r.embedded = true;
@@ -407,6 +411,9 @@ pub struct Summary {
     pub critical: u64,
     pub thermo: Option<Thermo>,
 }
+
+/// The trap message of a run that stopped for more input.
+pub const WAITING: &str = "waiting for input";
 
 /// What an embedded run left behind. Also usable after a trap.
 pub fn summary() -> Summary {
@@ -570,6 +577,11 @@ pub extern "C" fn noe_emit(v: i64) {
 }
 
 #[no_mangle]
+pub extern "C" fn noe_emitn(v: i64) {
+    let _ = write!(rt().out, "{v}");
+}
+
+#[no_mangle]
 pub extern "C" fn noe_emitc(v: i64) {
     let _ = rt().out.write_all(&[v as u8]);
 }
@@ -579,12 +591,27 @@ pub unsafe extern "C" fn noe_emits(p: *const u8, n: i64) {
     let _ = rt().out.write_all(std::slice::from_raw_parts(p, n as usize));
 }
 
+fn wait_for_input(r: &mut Rt) {
+    if r.interactive && r.input.fill_buf().map_or(true, |b| b.is_empty()) {
+        die(WAITING.to_string());
+    }
+}
+
+/// An embedded host has no terminal, so typed input joins the transcript here.
+fn echo(r: &mut Rt, bytes: &[u8]) {
+    if r.embedded {
+        let _ = r.out.write_all(bytes);
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn noe_absorb() -> i64 {
     let r = rt();
     let _ = r.out.flush();
+    wait_for_input(r);
     let mut line = Vec::new();
     let _ = r.input.read_until(b'\n', &mut line);
+    echo(r, &line);
     let text = String::from_utf8_lossy(&line);
     match text.trim().parse::<i128>() {
         Ok(v) => v as i64,
@@ -596,9 +623,13 @@ pub extern "C" fn noe_absorb() -> i64 {
 pub extern "C" fn noe_absorbc() -> i64 {
     let r = rt();
     let _ = r.out.flush();
+    wait_for_input(r);
     let mut byte = [0u8];
     match r.input.read(&mut byte) {
-        Ok(1) => byte[0] as i64,
+        Ok(1) => {
+            echo(r, &byte);
+            byte[0] as i64
+        }
         _ => -1,
     }
 }

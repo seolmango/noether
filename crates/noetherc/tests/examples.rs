@@ -8,7 +8,7 @@ const NOETHERC: &str = env!("CARGO_BIN_EXE_noetherc");
 const HELLO: &str = "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.\
                      >>.<-.<.+++.------.--------.>>+.>++.!";
 
-const EXAMPLES: [(&str, &str, &str); 7] = [
+const EXAMPLES: [(&str, &str, &str); 10] = [
     ("sum", "", "55\n"),
     ("mul", "", "42\n-144\n97406784\n"),
     ("fact", "", "3628800\n1307674368000\n"),
@@ -16,6 +16,26 @@ const EXAMPLES: [(&str, &str, &str); 7] = [
     ("symmetry", "", "11\n44\n16\n"),
     ("condensate", "", "1000\n2414\n"),
     ("bf", HELLO, "Hello World!\n"),
+    (
+        "gugudan",
+        "7\n",
+        "몇 단을 볼까요? (2~9, 0이면 전부): 7 x 1 = 7\n7 x 2 = 14\n7 x 3 = 21\n7 x 4 = 28\n\
+         7 x 5 = 35\n7 x 6 = 42\n7 x 7 = 49\n7 x 8 = 56\n7 x 9 = 63\n",
+    ),
+    (
+        "calc",
+        "*\n6\n7\n/\n100\n7\n-\n3\n10\n+\n3\n10\nq\n",
+        "연산자 (+ - * /, q는 끝): 왼쪽 수: 오른쪽 수: 결과: 42\n\
+         연산자 (+ - * /, q는 끝): 왼쪽 수: 오른쪽 수: 결과: 14\n\
+         연산자 (+ - * /, q는 끝): 왼쪽 수: 오른쪽 수: 결과: -7\n\
+         연산자 (+ - * /, q는 끝): 왼쪽 수: 오른쪽 수: 결과: 13\n\
+         연산자 (+ - * /, q는 끝): 끝\n",
+    ),
+    (
+        "name",
+        "Hi\n",
+        "이름을 입력하세요: 안녕하세요, Hi님!\n입력은 2바이트입니다: 72 105\n",
+    ),
 ];
 
 const REJECTED: [(&str, &str); 8] = [
@@ -35,6 +55,18 @@ const TRAPS: [(&str, &str); 4] = [
     ("boson a @ 0\nboson b @ 5000\nfuse a b\n", "same centre"),
     ("fermion a @ 0\ncreate boson @ 10\n", "vacuum base"),
 ];
+
+/// `cargo test` does not build the static runtime that native linking needs.
+fn build_runtime() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let status = Command::new(env!("CARGO"))
+            .args(["build", "-p", "noether-rt"])
+            .status()
+            .unwrap();
+        assert!(status.success());
+    });
+}
 
 fn dir() -> PathBuf {
     let d = std::env::temp_dir().join(format!("noether-test-{}", std::process::id()));
@@ -72,7 +104,28 @@ fn examples_run() {
 }
 
 #[test]
+fn guessing_every_number_finds_the_secret() {
+    let mut input = String::from("3\n");
+    (1..=100).for_each(|n| input.push_str(&format!("{n}\n")));
+    let out = feed(Command::new(NOETHERC).arg(example("guess")).arg("--run"), &input);
+    assert!(String::from_utf8_lossy(&out.stdout).ends_with("번 만에 맞혔습니다.\n"));
+}
+
+#[test]
+fn the_cat_survives_a_cold_box_and_shaking_decides_a_hot_one() {
+    let fate = |shakes: &str| {
+        let input = format!("{shakes}\n");
+        let out = feed(Command::new(NOETHERC).arg(example("cat")).arg("--run"), &input);
+        String::from_utf8_lossy(&out.stdout).contains("살아 있습니다")
+    };
+    assert!(fate("5"));
+    assert!(!fate("50"));
+    assert!(fate("100"));
+}
+
+#[test]
 fn native_matches_executor_in_every_mode() {
+    build_runtime();
     for (name, input, want) in EXAMPLES {
         for flags in [&[][..], &["--no-symmetry"], &["--no-isolate"]] {
             let exe = dir().join(format!("{name}{}.exe", flags.len()));
@@ -106,6 +159,7 @@ fn noise_is_seeded_bounded_and_persistent() {
 
 #[test]
 fn thermo_records_the_same_history_both_ways() {
+    build_runtime();
     let (a, b) = (dir().join("va.exe"), dir().join("na.exe"));
     let run = Command::new(NOETHERC)
         .args([example("overheat").as_os_str(), "--run".as_ref(), "--thermo".as_ref(), "-o".as_ref()])

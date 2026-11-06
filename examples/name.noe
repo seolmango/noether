@@ -1,0 +1,35 @@
+# 이름과 바이트
+#
+# 문자열 변수는 없으므로 입력을 격자에 바이트로 담습니다.
+# emitc는 값을 바이트로, emitn은 값을 숫자로 출력합니다.
+# 줄바꿈의 코드는 10입니다.
+fermion text[64]
+fermion n
+fermion i
+fermion c
+
+emit "이름을 입력하세요: "
+|c> <- absorbc
+while <c|~32 != 10
+ if <c|~32 < 0
+    |c> <- 10
+ else
+    |text[<n|~32]> <- <c|~32
+    raise n
+    |c> <- absorbc
+
+emit "안녕하세요, "
+while <i|~32 < <n|~32
+ emitc <text[<i|~32]|~32
+ raise i
+emit "님!\n"
+
+emit "입력은 "
+emitn <n|~32
+emit "바이트입니다:"
+|i> <- 0
+while <i|~32 < <n|~32
+ emit " "
+ emitn <text[<i|~32]|~32
+ raise i
+emit "\n"

@@ -31,7 +31,6 @@
       <div class="levels" aria-hidden="true"><i style="--n:1"></i><i style="--n:4"></i><i style="--n:9"></i><i style="--n:16"></i><i style="--n:25"></i></div>
       <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Noether 소스 코드"></textarea>
     </div>
-    <textarea id="input" rows="2" spellcheck="false" placeholder="표준 입력" aria-label="프로그램에 줄 표준 입력" hidden></textarea>
     <p id="verdict" role="status" hidden></p>
   </section>
 
@@ -44,7 +43,10 @@
       <span id="summary"></span>
       <span class="key"><canvas id="legend" width="120" height="8" aria-hidden="true"></canvas>임계<i aria-hidden="true"></i>초과</span>
     </div>
-    <pre id="output" tabindex="0"></pre>
+    <section class="terminal" aria-label="터미널">
+      <div class="titlebar"><h2>터미널</h2><span id="state"></span></div>
+      <div id="screen"><span id="output"></span><span id="fault"></span><input id="stdin" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="프로그램에 보낼 입력" hidden></div>
+    </section>
   </section>
 </main>
 <script src="app.js" type="module"></script>

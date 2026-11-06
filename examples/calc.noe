@@ -1,0 +1,68 @@
+# 계산기
+#
+# 사칙연산을 전부 Noether의 규칙으로 만듭니다.
+# 덧셈은 겹침, 뺄셈은 부호 반전, 곱셈은 제곱,
+# 나눗셈은 겹친 변수를 반복해서 합치는 것입니다.
+field seed=1
+
+fermion op
+fermion skip
+fermion a
+fermion b
+
+path add(x, y)
+ boson p @ x
+ |p> <- <y|~32
+ return <x|~32
+
+path sub(x, y)
+ boson p @ x
+ |p> <- <y|~32
+ flip p
+ return <x|~32
+
+path mul(x, y)
+ boson p @ x
+ fermion s
+ boson u @ s
+ |p> <- <y|~32
+ |s> <- <x|x>~32
+ flip p
+ |u> <- <x|x>~32
+ flip u
+ return <s+768|~1024
+
+# 양수끼리의 몫. x 자리는 겹친 m 때문에 항상 x-y를 읽는다.
+path div(x, y)
+ fermion q
+ boson m @ x
+ |m> <- <y|~32
+ flip m
+ while <x|~32 >= 0
+    fuse x m
+    raise q
+ return <q|~32
+
+while <op|~32 != 113
+ emit "연산자 (+ - * /, q는 끝): "
+ |op> <- absorbc
+ |skip> <- absorbc
+ if <op|~32 != 113
+    emit "왼쪽 수: "
+    |a> <- absorb
+    emit "오른쪽 수: "
+    |b> <- absorb
+    emit "결과: "
+    if <op|~32 == 43
+         emit add(<a|~32, <b|~32)
+    if <op|~32 == 45
+         emit sub(<a|~32, <b|~32)
+    if <op|~32 == 42
+         emit mul(<a|~32, <b|~32)
+    if <op|~32 == 47
+         if <b|~32 == 0
+                emit "0으로 나눌 수 없습니다.\n"
+         else
+                emit div(<a|~32, <b|~32)
+
+emit "끝\n"

@@ -23,7 +23,7 @@ const TRAP_SHAPE: i64 = 0;
 const TRAP_INDEX: i64 = 1;
 const TRAP_FUSE: i64 = 2;
 
-const RT_FUNCS: [(&str, usize, bool); 21] = [
+const RT_FUNCS: [(&str, usize, bool); 22] = [
     ("noe_init", 5, false),
     ("noe_finish", 1, false),
     ("noe_thermo_start", 2, false),
@@ -40,6 +40,7 @@ const RT_FUNCS: [(&str, usize, bool); 21] = [
     ("noe_flush", 1, false),
     ("noe_emit", 1, false),
     ("noe_emitc", 1, false),
+    ("noe_emitn", 1, false),
     ("noe_emits", 2, false),
     ("noe_absorb", 0, true),
     ("noe_absorbc", 0, true),
@@ -804,6 +805,10 @@ impl Gen<'_, '_> {
             Op::EmitC(e) => {
                 let v = self.expr(e);
                 self.rt("noe_emitc", &[v]);
+            }
+            Op::EmitN(e) => {
+                let v = self.expr(e);
+                self.rt("noe_emitn", &[v]);
             }
             Op::EmitS(bytes) => {
                 let id = self

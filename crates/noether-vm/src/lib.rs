@@ -287,6 +287,10 @@ impl Vm<'_> {
                 let v = self.expr(e);
                 rt::noe_emitc(v);
             }
+            Op::EmitN(e) => {
+                let v = self.expr(e);
+                rt::noe_emitn(v);
+            }
             Op::EmitS(bytes) => unsafe { rt::noe_emits(bytes.as_ptr(), bytes.len() as i64) },
             Op::Return(e) => return Flow::Return(self.expr(e)),
             Op::Eval(e) => {
@@ -377,10 +381,20 @@ pub fn run(module: &Module, budget: u64, thermo: Option<String>) {
 
 /// Runs with memory I/O and always records temperatures. A trap ends in a
 /// panic; the host then collects the results with `noether_rt::summary`.
-pub fn run_embedded(module: &Module, budget: u64, input: Vec<u8>, samples: usize) -> u64 {
+///
+/// With `interactive`, running out of input stops the run instead of reading
+/// end of file. Programs are deterministic, so a host can add input and run
+/// again from the start to continue where this run stopped.
+pub fn run_embedded(
+    module: &Module,
+    budget: u64,
+    input: Vec<u8>,
+    samples: usize,
+    interactive: bool,
+) -> u64 {
     let program = Box::leak(Box::new(prepare(module)));
     let field = Box::leak(Box::new(boot(module)));
-    rt::embed(input);
+    rt::embed(input, interactive);
     rt::start_thermo(None, samples);
     let tick = execute(module, program, budget, field);
     rt::noe_finish(tick);

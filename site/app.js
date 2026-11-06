@@ -4,7 +4,8 @@ const LABEL_WIDTH = 92;
 const AXIS_HEIGHT = 22;
 
 const code = $("code");
-const input = $("input");
+const stdinField = $("stdin");
+const screen = $("screen");
 const runButton = $("run");
 const stopButton = $("stop");
 const verdict = $("verdict");
@@ -16,6 +17,11 @@ let grid = null; // what the chart is showing, for hover
 let checkId = 0;
 let checkTimer;
 let running = false;
+// Programs are deterministic, so "continuing" after input means running again
+// from the start with everything typed so far.
+let preset = ""; // input the example supplies by itself
+let stdin = "";
+let eof = false;
 
 // ---------------------------------------------------------------- worker
 
@@ -34,11 +40,19 @@ function say(text) {
 }
 
 function run() {
+  stdin = preset;
+  eof = false;
+  execute();
+}
+
+function execute() {
   running = true;
   runButton.hidden = true;
   stopButton.hidden = false;
+  stdinField.hidden = true;
   say("");
-  worker.postMessage({ kind: "run", source: code.value, input: input.value });
+  $("state").textContent = "실행 중";
+  worker.postMessage({ kind: "run", source: code.value, input: stdin, interactive: !eof });
 }
 
 function idle() {
@@ -51,7 +65,7 @@ function stop() {
   worker.terminate();
   startWorker();
   idle();
-  say("실행을 중지했습니다.");
+  $("state").textContent = "중지됨";
 }
 
 function finishRun(r) {
@@ -61,12 +75,20 @@ function finishRun(r) {
     return;
   }
   last = r;
-  say({
-    ok: "",
-    trap: `실행 오류로 멈췄습니다: ${r.message}`,
-    budget: "실행 단계 한도를 넘어 멈췄습니다. 반복 횟수를 줄여 보세요.",
-  }[r.status]);
+  say("");
   $("output").textContent = r.output;
+  $("fault").textContent = {
+    ok: "",
+    input: "",
+    trap: `\n실행 오류: ${r.message}\n`,
+    budget: "\n실행 단계 한도를 넘어 멈췄습니다. 반복 횟수를 줄여 보세요.\n",
+  }[r.status];
+  $("state").textContent = {
+    ok: "종료", input: "입력 대기", trap: "오류로 멈춤", budget: "오류로 멈춤",
+  }[r.status];
+  stdinField.hidden = r.status !== "input";
+  if (r.status === "input") stdinField.focus({ preventScroll: true });
+  screen.scrollTop = screen.scrollHeight;
   const n = (v) => Number(v).toLocaleString("ko-KR");
   $("summary").textContent =
     `최고 온도 ${n(r.peak)}, 임계 온도 ${n(r.critical)}, 흔들린 읽기 ${n(r.noisy)}회`;
@@ -86,13 +108,7 @@ function showExamples(list) {
 
 function load(i) {
   code.value = examples[i].source;
-  input.value = examples[i].input;
-  syncInput();
-}
-
-// The input box only matters to programs that read input.
-function syncInput() {
-  input.hidden = !code.value.includes("absorb");
+  preset = examples[i].input;
 }
 
 function showCheck(r) {
@@ -101,7 +117,6 @@ function showCheck(r) {
 }
 
 code.addEventListener("input", () => {
-  syncInput();
   clearTimeout(checkTimer);
   checkTimer = setTimeout(() => {
     checkId += 1;
@@ -127,6 +142,24 @@ $("examples").addEventListener("change", (e) => {
   run();
 });
 runButton.addEventListener("click", run);
+
+stdinField.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    stdin += stdinField.value + "\n";
+    stdinField.value = "";
+    execute();
+  } else if (e.key === "d" && e.ctrlKey) {
+    e.preventDefault();
+    stdin += stdinField.value;
+    stdinField.value = "";
+    eof = true;
+    execute();
+  }
+});
+
+screen.addEventListener("click", () => {
+  if (!stdinField.hidden && !getSelection().toString()) stdinField.focus();
+});
 stopButton.addEventListener("click", stop);
 
 // ---------------------------------------------------------------- thermogram
@@ -210,7 +243,7 @@ function draw() {
   grid = null;
   if (!last || last.samples.length === 0) {
     g.fillStyle = ink;
-    g.fillText("이 프로그램은 메모리에 열을 내지 않았습니다.", 0, box.height / 2);
+    g.fillText("아직 메모리에 열이 나지 않았습니다.", 0, box.height / 2);
     return;
   }
 

@@ -29,7 +29,7 @@ while <n|~32 > 0
 
 **이름:** 영문자나 `_`로 시작하고 영문자, 숫자, `_`가 이어집니다. 대소문자를 구분합니다.
 
-**키워드:** `field fermion boson stride mass path return if else while symmetry time translate in raise lower flip swap fuse emit emitc absorb absorbc create annihilate`입니다. 예약어는 아니지만 변수 이름으로 쓰면 헷갈리고, `absorb`와 `absorbc`는 표현식에서 항상 입력으로 해석됩니다. 쓰지 않는 것을 권합니다.
+**키워드:** `field fermion boson stride mass path return if else while symmetry time translate in raise lower flip swap fuse emit emitc emitn absorb absorbc create annihilate`입니다. 예약어는 아니지만 변수 이름으로 쓰면 헷갈리고, `absorb`와 `absorbc`는 표현식에서 항상 입력으로 해석됩니다. 쓰지 않는 것을 권합니다.
 
 **정수:** 10진수만 있습니다. 양수는 `9223372036854775807`까지, 음수 리터럴은 `-9223372036854775808`까지 쓸 수 있고, 넘으면 컴파일 오류입니다.
 
@@ -508,7 +508,7 @@ emit <i|~32         # 0
 | 허용 | 금지 |
 |---|---|
 | `raise`, `lower`, `flip`, `swap`, `fuse` | 덮어쓰기 |
-| `if`, `else`, `while` | `emit`, `emitc` |
+| `if`, `else`, `while` | `emit`, `emitc`, `emitn` |
 | 조건과 첨자 안의 읽기 | `create`, `annihilate`, `return` |
 | 중첩된 `symmetry time` | `symmetry translate` |
 
@@ -554,12 +554,29 @@ emit <c[3]|~32      # 44
 | 문법 | 뜻 |
 |---|---|
 | `emit 값` | 10진수와 줄바꿈을 출력 |
+| `emitn 값` | 10진수만 출력. 줄바꿈 없음 |
 | `emit "문자열"` | 문자열을 그대로 출력. 줄바꿈 없음 |
 | `emitc 값` | 값의 하위 8비트를 1바이트로 출력 |
 | `absorb` | 입력에서 한 줄을 읽어 앞뒤 공백을 지우고 정수로 변환. 실패하거나 입력이 끝나면 0 |
 | `absorbc` | 1바이트를 읽음. 입력이 끝나면 -1 |
 
-`emit`은 문장이고 `absorb`와 `absorbc`는 표현식입니다.
+`emit` 계열은 문장이고 `absorb`와 `absorbc`는 표현식입니다.
+
+`emitc`는 값을 글자 코드로 출력합니다. ASCII 코드를 이어서 내보내면 문자열이 됩니다.
+
+```noether
+emitc 72
+emitc 105
+emitc 10          # Hi와 줄바꿈
+emitn 7
+emit " x "
+emitn 6
+emit " = 42\n"    # 7 x 6 = 42
+```
+
+UTF-8 바이트를 차례로 내보내면 한글도 출력됩니다.
+
+**문자열 저장:** 문자열 변수는 없습니다. 문자열 리터럴은 `emit`에서만 쓸 수 있고, 입력받은 글자를 저장하려면 격자에 바이트로 넣습니다. [name.noe](../examples/name.noe)가 예제입니다.
 
 ## 실행 순서
 
@@ -591,6 +608,7 @@ stmt      = ket "<-" value
           | "symmetry" "translate" NAME "in" NAME BLOCK
           | "emit" (value | STRING)
           | "emitc" value
+          | "emitn" value
           | "create" ("fermion" | "boson") "@" value
           | "annihilate" value
           | "return" [ value ]
@@ -687,3 +705,5 @@ tick,tile,temperature
 - 행이 2²⁰개를 넘으면 전체 기간에서 고르게 절반씩 솎아냅니다. 요약의 최고 온도와 비트 수는 솎아내도 정확합니다.
 
 **플레이그라운드:** 브라우저 실행에는 몇 가지 한도가 있습니다. 실행 문장 수 6천만, 출력 1MiB, 온도 기록 4만 행이고, 재귀 깊이는 브라우저 스택에 달렸습니다. 한도 외의 동작은 같습니다.
+
+터미널 창은 프로그램이 입력을 읽으려 할 때 입력을 받습니다. Enter로 한 줄을 보내고, Ctrl+D로 입력을 끝냅니다. 내부적으로는 입력이 늘 때마다 프로그램을 처음부터 다시 실행합니다. 같은 입력이면 결과가 같으므로 화면에는 이어서 실행되는 것처럼 보입니다.
