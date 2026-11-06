@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 400" role="img" aria-label="Noether가 속도와 정확도에서 모두 1위인 것처럼 조작한 벤치마크 차트">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 400" role="img" aria-label="속도와 정확도 벤치마크 차트">
 <style>
   text { font: 14px "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; fill: #12304a; }
   .title { font-size: 19px; font-weight: 600; }
@@ -9,7 +9,7 @@
   .them { fill: #9fb4c0; }
 </style>
 <rect width="860" height="400" rx="6" fill="#f7fafb"/>
-<text class="title" x="10" y="32">속도: Noether 압도적 1위</text>
+<text class="title" x="10" y="32">속도</text>
 <text class="note" x="10" y="54">초당 반복 횟수 (높을수록 좋음)</text>
 <line class="grid" x1="58" x2="388" y1="336.0" y2="336.0"/>
 <text class="note" x="50" y="340.0" text-anchor="end">395M</text>
@@ -37,7 +37,7 @@
 <text class="note" x="346.8" y="329.0" text-anchor="middle">8M</text>
 <line class="axis" x1="58" x2="388" y1="336" y2="336"/>
 <line class="axis" x1="58" x2="58" y1="92" y2="336"/>
-<text class="title" x="440" y="32">정확도: 역시 Noether 1위</text>
+<text class="title" x="440" y="32">정확도</text>
 <text class="note" x="440" y="54">정답률</text>
 <line class="grid" x1="488" x2="818" y1="336.0" y2="336.0"/>
 <text class="note" x="480" y="340.0" text-anchor="end">100%</text>
@@ -65,5 +65,4 @@
 <text class="note" x="776.8" y="329.0" text-anchor="middle">100%</text>
 <line class="axis" x1="488" x2="818" y1="336" y2="336"/>
 <line class="axis" x1="488" x2="488" y1="92" y2="336"/>
-<text class="note" x="430.0" y="388" text-anchor="middle">Noether 공식 벤치마크 재단 인증</text>
 </svg>
