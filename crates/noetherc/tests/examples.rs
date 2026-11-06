@@ -175,7 +175,8 @@ fn noise_is_seeded_bounded_and_persistent() {
         .collect();
     assert!(values.iter().any(|v| v[0] != values[0][0]));
     for v in &values {
-        assert!((v[0] - 1000).abs() <= 16);
+        // A sharp read shakes by hbar plus a quarter of the value.
+        assert!((v[0] - 1000).abs() <= 16 + 250);
         assert_eq!(v[0], v[1]);
     }
 }

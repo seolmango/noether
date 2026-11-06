@@ -88,7 +88,7 @@ target/release/noetherc.exe examples/overheat.noe --thermo -o overheat.exe
 ```
 
 ```text
-thermo: 18438 ticks, peak T 11235 (critical 4096), 1471 noisy reads, 14996 bits erased -> overheat.thermo.csv
+thermo: 18600 ticks, peak T 11245 (critical 4096), 1478 noisy reads, 15006 bits erased -> overheat.thermo.csv
 ```
 
 `overheat.thermo.csv`는 `tick,tile,temperature` 형식입니다. 행이 약 100만 개를 넘으면 전체 기간에 고르게 솎아냅니다. 최고 온도와 집계 값은 솎아내도 정확합니다.

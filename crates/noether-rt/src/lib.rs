@@ -230,14 +230,16 @@ impl Rt {
         let p = unsafe { &mut *p };
         let e = self.h - k.min(s);
         if e >= 0 {
-            let dv = 1u128 << e;
+            // A fixed error plus a share of the value, so big values shake too.
+            let share = p.v.unsigned_abs() >> (8 - 2 * e).max(2);
+            let dv = (1u128 << e) + share as u128;
             let h = mix(
                 self.seed
                     ^ (c as u64).wrapping_mul(K_ADDR)
                     ^ p.clock.wrapping_mul(K_CLOCK)
                     ^ call_id.wrapping_mul(K_CALL),
             );
-            let n = ((((h >> 32) as u128) * (2 * dv + 1)) >> 32) as i64 - dv as i64;
+            let n = (((((h >> 32) as u128) * (2 * dv + 1)) >> 32) as i128 - dv as i128) as i64;
             p.v = p.v.wrapping_add(n);
             p.clock += 1;
             self.noisy.set(self.noisy.get() + 1);
