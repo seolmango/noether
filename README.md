@@ -1,3 +1,5 @@
+<p align="center"><img src="site/logo.svg" width="112" alt="Noether 로고"></p>
+
 # Noether
 
 변수가 파동이고 메모리에 온도가 있는 프로그래밍 언어입니다. 이상한 건 규칙이고, 실행은 진짜입니다. Noether는 인터프리터가 아니라 네이티브 코드를 만드는 컴파일러로 동작합니다.

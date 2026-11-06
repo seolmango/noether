@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const MAX_ROWS = 16;
-const LABEL_WIDTH = 124;
+const LABEL_WIDTH = 92;
 const AXIS_HEIGHT = 22;
 
 const code = $("code");
@@ -28,12 +28,16 @@ function startWorker() {
   };
 }
 
+function say(text) {
+  verdict.textContent = text;
+  verdict.hidden = !text;
+}
+
 function run() {
   running = true;
   runButton.hidden = true;
   stopButton.hidden = false;
-  verdict.className = "verdict";
-  verdict.textContent = "실행 중입니다.";
+  say("");
   worker.postMessage({ kind: "run", source: code.value, input: input.value });
 }
 
@@ -47,7 +51,7 @@ function stop() {
   worker.terminate();
   startWorker();
   idle();
-  verdict.textContent = "실행을 중지했습니다.";
+  say("실행을 중지했습니다.");
 }
 
 function finishRun(r) {
@@ -57,20 +61,15 @@ function finishRun(r) {
     return;
   }
   last = r;
-  verdict.className = "verdict" + (r.status === "ok" ? "" : " bad");
-  verdict.textContent = {
-    ok: "끝까지 실행했습니다.",
+  say({
+    ok: "",
     trap: `실행 오류로 멈췄습니다: ${r.message}`,
     budget: "실행 단계 한도를 넘어 멈췄습니다. 반복 횟수를 줄여 보세요.",
-  }[r.status];
+  }[r.status]);
   $("output").textContent = r.output;
   const n = (v) => Number(v).toLocaleString("ko-KR");
-  $("r-ticks").textContent = n(r.ticks);
-  $("r-peak").textContent = n(r.peak);
-  $("r-critical").textContent = n(r.critical);
-  $("r-noisy").textContent = n(r.noisy);
-  $("r-erased").textContent = n(r.erased);
-  $("csv").disabled = r.samples.length === 0;
+  $("summary").textContent =
+    `최고 온도 ${n(r.peak)}, 임계 온도 ${n(r.critical)}, 흔들린 읽기 ${n(r.noisy)}회`;
   draw();
 }
 
@@ -88,20 +87,21 @@ function showExamples(list) {
 function load(i) {
   code.value = examples[i].source;
   input.value = examples[i].input;
-  input.closest("details").open = examples[i].input !== "";
+  syncInput();
+}
+
+// The input box only matters to programs that read input.
+function syncInput() {
+  input.hidden = !code.value.includes("absorb");
 }
 
 function showCheck(r) {
   if (running) return;
-  verdict.className = "verdict" + (r.ok ? "" : " bad");
-  if (r.ok) {
-    verdict.textContent = "문법에 문제가 없습니다.";
-  } else {
-    verdict.textContent = (r.line ? `${r.line}번째 줄: ` : "") + r.message;
-  }
+  say(r.ok ? "" : (r.line ? `${r.line}번째 줄: ` : "") + r.message);
 }
 
 code.addEventListener("input", () => {
+  syncInput();
   clearTimeout(checkTimer);
   checkTimer = setTimeout(() => {
     checkId += 1;
@@ -204,7 +204,7 @@ function draw() {
   const g = canvas.getContext("2d");
   g.scale(dpr, dpr);
   g.clearRect(0, 0, box.width, box.height);
-  const ink = token("--ink-soft");
+  const ink = token("--soft");
   g.font = '12px "IBM Plex Sans KR", sans-serif';
   g.textBaseline = "middle";
   grid = null;
@@ -219,7 +219,7 @@ function draw() {
   const data = build(last, columns);
   const rows = data.cells.length;
   const height = box.height - AXIS_HEIGHT;
-  const rowH = Math.min(80, height / rows);
+  const rowH = height / rows;
   const colW = width / columns;
   const color = ramp();
   const over = token("--heat-over");
@@ -229,7 +229,7 @@ function draw() {
     const y = row * rowH;
     g.fillStyle = ink;
     const label = data.labels[row];
-    g.fillText(label.length > 16 ? label.slice(0, 15) + "…" : label, 0, y + rowH / 2);
+    g.fillText(label.length > 12 ? label.slice(0, 11) + "…" : label, 0, y + rowH / 2);
     for (let c = 0; c < columns; c += 1) {
       const t = data.cells[row][c];
       const x = LABEL_WIDTH + c * colW;
@@ -292,19 +292,6 @@ $("plot").addEventListener("pointermove", (e) => {
 });
 $("plot").addEventListener("pointerleave", () => { $("tip").hidden = true; });
 
-$("csv").addEventListener("click", () => {
-  const lines = ["tick,tile,temperature"];
-  for (let i = 0; i < last.samples.length; i += 3) {
-    const tile = last.tiles[last.samples[i + 1]].replaceAll('"', "'");
-    lines.push(`${last.samples[i]},"${tile}",${last.samples[i + 2]}`);
-  }
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
-  link.download = "noether.thermo.csv";
-  link.click();
-  URL.revokeObjectURL(link.href);
-});
-
 new ResizeObserver(draw).observe($("heat"));
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   drawLegend();
@@ -318,7 +305,6 @@ if (pages) {
   const base = `https://github.com/${pages[1]}/${repo}`;
   $("link-repo").href = base;
   $("link-syntax").href = `${base}/blob/main/docs/syntax.md`;
-  $("link-concepts").href = `${base}/blob/main/docs/concepts.md`;
   $("links").hidden = false;
 }
 

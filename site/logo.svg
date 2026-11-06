@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Noether">
+  <style>
+    .bracket { stroke: #12304a; }
+    @media (prefers-color-scheme: dark) { .bracket { stroke: #dcebf3; } }
+  </style>
+  <path class="bracket" d="M23 7 7 32l16 25M41 7l16 25-16 25" fill="none" stroke-width="6"/>
+  <path d="M32 2v60" stroke="#c8254f" stroke-width="6"/>
+</svg>

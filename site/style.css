@@ -1,44 +1,48 @@
 :root {
   color-scheme: light dark;
-  --frost: #e6eef3;
-  --ice: #f5f9fb;
-  --glass: #c7d7e0;
+  --paper: #f7fafb;
+  --line: #d5e0e6;
   --ink: #12304a;
-  --ink-soft: #4a6578;
+  --soft: #5a7486;
   --cold: #1f6f9f;
-  /* Heat belongs to the data alone; no chrome uses these. */
-  --heat-0: #dfe9ef;
+  --level: rgb(31 111 159 / .14);
+  /* Heat belongs to the data alone. */
+  --heat-0: #e3ecf1;
   --heat-1: #f0a58f;
   --heat-2: #b3123f;
   --heat-over: #3a0418;
-  --level: rgb(31 111 159 / .16);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --frost: #0d1b27;
-    --ice: #13242f;
-    --glass: #2a4252;
+    --paper: #101d27;
+    --line: #27394a;
     --ink: #dcebf3;
-    --ink-soft: #92acbb;
+    --soft: #8ea8b8;
     --cold: #7cc0e6;
-    --heat-0: #182c39;
+    --level: rgb(124 192 230 / .14);
+    --heat-0: #1a2d3a;
     --heat-1: #a8384f;
     --heat-2: #ff8f70;
     --heat-over: #fff1d6;
-    --level: rgb(124 192 230 / .16);
   }
 }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
+html, body { height: 100%; }
+
 body {
+  display: flex;
+  flex-direction: column;
   margin: 0;
-  background: var(--frost);
+  background: var(--paper);
   color: var(--ink);
-  font: 400 15px/1.6 "IBM Plex Sans KR", system-ui, sans-serif;
+  font: 400 14px/1.5 "IBM Plex Sans KR", system-ui, sans-serif;
 }
+
+:focus-visible { outline: 2px solid var(--cold); outline-offset: -2px; }
 
 .sr {
   position: absolute;
@@ -48,86 +52,60 @@ body {
   clip-path: inset(50%);
 }
 
-:focus-visible { outline: 2px solid var(--cold); outline-offset: 2px; }
-
-.masthead {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: baseline;
-  gap: 8px 28px;
-  padding: 22px 28px 14px;
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
 }
 
-.mark {
-  margin: 0;
-  font: italic 500 40px/1 "STIX Two Text", serif;
-  letter-spacing: -.01em;
-}
+h1 { margin: 0 14px 0 0; font-size: 16px; font-weight: 500; }
 
-.mark span { font-style: normal; color: var(--cold); }
-
-.tagline { margin: 0; max-width: 62ch; color: var(--ink-soft); }
-
-.links { display: flex; gap: 18px; }
-.links a { color: var(--cold); }
-
-.bench {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-  gap: 28px;
-  padding: 0 28px 28px;
-}
-
-.bar { display: flex; gap: 8px; margin-bottom: 8px; }
-.picker { flex: 1; min-width: 0; }
-
-select, button, textarea {
-  font: inherit;
+select, button {
+  height: 32px;
   color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
 }
 
-select {
-  width: 100%;
-  height: 38px;
-  padding: 0 8px;
-  background: var(--ice);
-  border: 1px solid var(--glass);
-  border-radius: 3px;
-}
+select { max-width: 220px; min-width: 0; padding: 0 6px; }
+select option { background: var(--paper); }
 
-button {
-  height: 38px;
-  padding: 0 18px;
-  background: var(--ice);
-  border: 1px solid var(--glass);
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-button.primary {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--ice);
-  font-weight: 600;
-}
-
+button { padding: 0 16px; cursor: pointer; }
+#run { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 button:disabled { opacity: .45; cursor: default; }
 
-button.quiet { height: 28px; padding: 0 10px; margin-left: auto; font-size: 13px; }
+nav { display: flex; gap: 16px; margin-left: auto; }
+nav a { color: var(--soft); text-decoration: none; }
+nav a:hover { color: var(--ink); }
+
+main {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.source {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+}
 
 .editor {
   position: relative;
-  height: min(58vh, 560px);
-  background: var(--ice);
-  border: 1px solid var(--glass);
-  border-radius: 3px;
-  overflow: hidden;
+  flex: 1;
+  min-height: 0;
   --ch: .6em;
-  --pad: 14px;
+  --pad: 16px;
   font: 400 14px/1.6 "IBM Plex Mono", ui-monospace, monospace;
 }
 
-/* The energy levels: columns where an indented line may legally begin. */
+/* Where an indented line may legally begin: 1, 4, 9, 16 and 25 spaces. */
 .levels i {
   position: absolute;
   top: 0;
@@ -143,125 +121,100 @@ button.quiet { height: 28px; padding: 0 10px; margin-left: auto; font-size: 13px
   width: 100%;
   height: 100%;
   padding: 12px var(--pad);
+  color: inherit;
   background: transparent;
   border: 0;
-  resize: none;
   outline-offset: -2px;
+  resize: none;
   font: inherit;
-  tab-size: 1;
 }
-
-.verdict {
-  min-height: 1.6em;
-  margin: 6px 0 2px;
-  color: var(--ink-soft);
-  font-size: 14px;
-}
-
-.verdict.bad { color: var(--ink); font-weight: 500; }
-
-details { margin-top: 6px; }
-summary { cursor: pointer; color: var(--ink-soft); }
 
 #input {
   width: 100%;
-  margin-top: 6px;
-  padding: 8px 10px;
-  background: var(--ice);
-  border: 1px solid var(--glass);
-  border-radius: 3px;
+  padding: 8px 16px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  resize: none;
   font: 400 13px/1.5 "IBM Plex Mono", monospace;
-  resize: vertical;
 }
 
-.cheat dl {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
-  margin: 8px 0 0;
-}
-
-.cheat dd { margin: 0; color: var(--ink-soft); }
-code { font: 400 13px "IBM Plex Mono", monospace; }
-
-.readout {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 36px;
-  margin: 0 0 16px;
-}
-
-.readout dt { color: var(--ink-soft); font-size: 13px; }
-
-.readout dd {
+#verdict {
   margin: 0;
-  font: 500 26px/1.2 "STIX Two Text", serif;
-  font-variant-numeric: tabular-nums lining-nums;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  font-weight: 500;
 }
 
-.thermogram { margin: 0; }
+.result {
+  display: grid;
+  grid-template-rows: minmax(0, 3fr) auto minmax(0, 2fr);
+  min-height: 0;
+}
 
-.thermogram figcaption { margin-bottom: 6px; font-weight: 500; }
-
-.plot { position: relative; }
+.plot { position: relative; min-height: 0; margin: 16px 16px 0; }
 
 #heat {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 250px;
+  height: 100%;
   cursor: crosshair;
 }
 
 .tip {
   position: absolute;
   z-index: 2;
-  min-width: 150px;
   padding: 6px 10px;
+  color: var(--paper);
   background: var(--ink);
-  color: var(--ice);
-  border-radius: 3px;
+  border-radius: 4px;
   font-size: 13px;
   line-height: 1.45;
+  white-space: nowrap;
   pointer-events: none;
 }
 
-.scale {
+.caption {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  color: var(--ink-soft);
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 8px 16px 12px;
+  color: var(--soft);
   font-size: 13px;
 }
 
-#legend { width: 140px; height: 10px; }
+.key { display: flex; align-items: center; gap: 6px; }
+#legend { width: 90px; height: 8px; }
 
-.over {
+.key i {
   width: 14px;
-  height: 10px;
-  margin-left: 8px;
+  height: 8px;
+  margin-left: 6px;
   background: repeating-linear-gradient(45deg, var(--heat-over) 0 2px, var(--heat-2) 2px 4px);
 }
 
-.console h2 { margin: 18px 0 6px; font-size: 15px; font-weight: 500; }
-
 #output {
-  height: 170px;
+  min-height: 0;
   margin: 0;
-  padding: 10px 14px;
+  padding: 12px 16px;
   overflow: auto;
-  background: var(--ice);
-  border: 1px solid var(--glass);
-  border-radius: 3px;
+  border-top: 1px solid var(--line);
   font: 400 13px/1.55 "IBM Plex Mono", monospace;
   white-space: pre-wrap;
 }
 
-@media (max-width: 900px) {
-  .masthead { grid-template-columns: 1fr; padding: 16px 16px 10px; }
-  .bench { grid-template-columns: minmax(0, 1fr); padding: 0 16px 16px; gap: 20px; }
-  .editor { height: 46vh; }
-  .readout { gap: 6px 24px; }
-  .readout dd { font-size: 22px; }
+@media (max-width: 800px) {
+  html, body { height: auto; }
+  header { flex-wrap: wrap; }
+  select { flex: 1; }
+  nav { order: 1; width: 100%; margin: 0; }
+  main { display: block; }
+  .source { border-right: 0; border-bottom: 1px solid var(--line); }
+  .editor { flex: none; height: 48vh; }
+  .result { display: block; }
+  .plot { height: 220px; }
+  #output { max-height: 240px; }
 }

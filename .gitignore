@@ -4,3 +4,4 @@ target/
 *.pdb
 __pycache__/
 site/noether.wasm
+.idea/
