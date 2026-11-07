@@ -1,5 +1,5 @@
 //! Semantic analysis: field layout, Pauli exclusion, name resolution and the
-//! symmetry checks. See docs/spec.md, chapters 4, 5 and 9.
+//! symmetry checks. See docs/syntax.md.
 
 use noether_syntax::*;
 use std::collections::{BTreeMap, HashMap};
@@ -21,26 +21,26 @@ pub struct Config {
 }
 
 impl Config {
-    /// Exponent of the critical temperature for a mass, may be out of range.
-    pub fn tc_exp(&self, mass: u32) -> i64 {
-        2 * (self.l as i64 - self.h as i64) - mass as i64
+    /// Exponent of the critical temperature, may be out of range.
+    pub fn tc_exp(&self) -> i64 {
+        2 * (self.l as i64 - self.h as i64)
     }
 
-    /// Exponent of the coldest temperature at which a packet of this mass is
-    /// no wider than a window of 2^k. Below it a read catches only a part.
-    pub fn lo_exp(&self, k: u32, mass: u32) -> i64 {
-        2 * (self.l as i64 - k as i64) - mass as i64
+    /// Exponent of the coldest temperature at which a packet is no wider than
+    /// a window of 2^k. Below it a read catches only a part.
+    pub fn lo_exp(&self, k: u32) -> i64 {
+        2 * (self.l as i64 - k as i64)
     }
 
     /// The temperature a function's private memory starts at.
     pub fn call_temp(&self) -> u64 {
-        (1u64 << (self.tc_exp(0) - 2).clamp(0, 62)).max(self.tmin)
+        (1u64 << (self.tc_exp() - 2).clamp(0, 62)).max(self.tmin)
     }
 
-    /// Exponent of the widest possible packet of a mass.
-    pub fn s_max(&self, mass: u32) -> u32 {
+    /// Exponent of the widest possible packet.
+    pub fn s_max(&self) -> u32 {
         let t = 63 - self.tmin.leading_zeros() as i64;
-        (self.l as i64 - (t + mass as i64) / 2).max(0) as u32
+        (self.l as i64 - t / 2).max(0) as u32
     }
 }
 
@@ -48,8 +48,8 @@ impl Config {
 pub struct Packet {
     pub c: i64,
     pub fermion: bool,
-    pub mass: u32,
     pub name: String,
+    pub line: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -78,12 +78,9 @@ pub struct Path {
 pub struct Module {
     pub cfg: Config,
     pub global: Layout,
-    pub vacuum_base: i64,
     pub paths: Vec<Path>,
     pub path_ids: HashMap<String, usize>,
     pub body: Vec<Stmt>,
-    /// Without `create` the vacuum stays empty for the whole run.
-    pub has_create: bool,
 }
 
 fn exponent(cfg: &HashMap<&str, u64>, key: &str) -> Result<u32> {
@@ -125,6 +122,9 @@ fn config(program: &[Stmt]) -> Result<Config> {
     if h > 30 || l > 30 {
         return err(0, "lambda and hbar are limited to 2^30");
     }
+    if cfg["tmin"] > 1 << 62 {
+        return err(0, "tmin is limited to 2^62");
+    }
     Ok(Config {
         h,
         l,
@@ -159,7 +159,7 @@ fn declare(d: &Decl, line: usize, layout: &mut Layout, cfg: &Config) -> Result<(
         layout.packets.push(Packet {
             c: base + j as i64 * stride,
             fermion: d.fermion,
-            mass: d.mass,
+            line,
             name: match count {
                 Some(_) => format!("{}[{j}]", d.name),
                 None => d.name.clone(),
@@ -177,7 +177,7 @@ fn check_pauli(layout: &Layout, spacing: i64) -> Result<()> {
         let gap = w[1].c - w[0].c;
         if gap < spacing {
             return err(
-                0,
+                w[0].line.max(w[1].line),
                 format!(
                     "Pauli violation: fermions {} and {} are {gap} apart, need {spacing}",
                     w[0].name, w[1].name
@@ -210,7 +210,6 @@ struct Checker<'a> {
     arity: Vec<usize>,
     local: HashMap<String, Shape>,
     in_path: bool,
-    has_create: bool,
 }
 
 impl Checker<'_> {
@@ -239,6 +238,17 @@ impl Checker<'_> {
                 self.value(i, ln)
             }
             Target::Ptr(v) => self.value(v, ln),
+        }
+    }
+
+    /// A target that gets changed. A whole lattice is not one packet.
+    fn packet(&self, t: &Target, ln: usize) -> Result<()> {
+        self.target(t, ln)?;
+        match t {
+            Target::Named(n) if self.shape(n) == Some(Shape::Lattice) => {
+                err(ln, format!("lattice {n} used as a single packet"))
+            }
+            _ => Ok(()),
         }
     }
 
@@ -302,13 +312,13 @@ impl Checker<'_> {
         }
         let forbidden_in_time = matches!(
             s.kind,
-            Write(..) | Emit(_) | EmitC(_) | EmitN(_) | EmitS(_) | Create(..) | Annihilate(_) | Return(_)
-                | CallStmt(_) | SymTranslate { .. }
+            Write(..) | Emit(_) | EmitC(_) | EmitN(_) | EmitS(_) | Return(_) | CallStmt(_)
+                | SymTranslate { .. }
         );
         let forbidden_in_sweep = matches!(
             s.kind,
-            Emit(_) | EmitC(_) | EmitN(_) | EmitS(_) | Create(..) | Annihilate(_) | Return(_)
-                | CallStmt(_) | While(..) | SymTime(_) | SymTranslate { .. }
+            Emit(_) | EmitC(_) | EmitN(_) | EmitS(_) | Return(_) | CallStmt(_) | While(..)
+                | SymTime(_) | SymTranslate { .. }
         );
         match sym {
             Sym2::Time if forbidden_in_time => {
@@ -324,13 +334,13 @@ impl Checker<'_> {
         }
         match &s.kind {
             Write(t, v) => {
-                self.target(t, ln)?;
+                self.packet(t, ln)?;
                 self.value(v, ln)?;
             }
-            Raise(t) | Lower(t) | Flip(t) => self.target(t, ln)?,
+            Raise(t) | Lower(t) | Flip(t) => self.packet(t, ln)?,
             Swap(a, b) | Fuse(a, b) => {
-                self.target(a, ln)?;
-                self.target(b, ln)?;
+                self.packet(a, ln)?;
+                self.packet(b, ln)?;
             }
             If(c, a, b) => {
                 self.cond(c, ln)?;
@@ -360,11 +370,6 @@ impl Checker<'_> {
                 };
             }
             Emit(v) | EmitC(v) | EmitN(v) | Return(v) | CallStmt(v) => self.value(v, ln)?,
-            Create(_, v) => {
-                self.has_create = true;
-                self.value(v, ln)?;
-            }
-            Annihilate(v) => self.value(v, ln)?,
             EmitS(_) | Field(_) | Decl(_) | Path { .. } => {}
         }
         if let Sym2::Translate { index, count } = sym {
@@ -469,9 +474,9 @@ fn impure(k: &StmtKind) -> bool {
 
 /// The static field as the runtime wants it.
 pub struct Tables {
-    /// h, l, c, b, tmin, seed, spacing, vacuum_base, n_packets, n_tiles, random
-    pub desc: [i64; 11],
-    /// Four words per packet: centre, mass, fermion, tile slot.
+    /// h, l, c, b, tmin, seed, n_packets, n_tiles, random
+    pub desc: [i64; 9],
+    /// Two words per packet: centre, tile slot.
     pub meta: Vec<i64>,
     /// Tile key of each dense slot.
     pub keys: Vec<i64>,
@@ -490,9 +495,9 @@ impl Module {
         let packet_slot: Vec<usize> =
             self.global.packets.iter().map(|p| slots[&(p.c >> cfg.b)]).collect();
         let n = self.global.packets.len();
-        let mut meta = Vec::with_capacity(n * 4);
+        let mut meta = Vec::with_capacity(n * 2);
         for (i, p) in self.global.packets.iter().enumerate() {
-            meta.extend([p.c, p.mass as i64, p.fermion as i64, packet_slot[i] as i64]);
+            meta.extend([p.c, packet_slot[i] as i64]);
         }
         let mut keys = vec![0i64; slots.len()];
         for (key, slot) in &slots {
@@ -505,8 +510,6 @@ impl Module {
             cfg.b as i64,
             cfg.tmin as i64,
             cfg.seed as i64,
-            cfg.spacing,
-            self.vacuum_base,
             n as i64,
             slots.len() as i64,
             cfg.random as i64,
@@ -531,8 +534,6 @@ pub fn analyze(program: Vec<Stmt>) -> Result<Module> {
         }
     }
     check_pauli(&global, cfg.spacing)?;
-    let highest = global.packets.iter().map(|p| p.c).max().unwrap_or(-1);
-    let vacuum_base = (((highest + cfg.spacing) >> cfg.b) + 1) << cfg.b;
 
     let mut paths = Vec::new();
     let mut path_ids = HashMap::new();
@@ -545,7 +546,6 @@ pub fn analyze(program: Vec<Stmt>) -> Result<Module> {
                 count: None,
                 at: None,
                 stride: None,
-                mass: 0,
             };
             declare(&d, line, &mut layout, &cfg)?;
         }
@@ -568,7 +568,6 @@ pub fn analyze(program: Vec<Stmt>) -> Result<Module> {
         arity,
         local: HashMap::new(),
         in_path: false,
-        has_create: false,
     };
     ck.block(&body, &Sym2::None, true)?;
     ck.in_path = true;
@@ -583,6 +582,5 @@ pub fn analyze(program: Vec<Stmt>) -> Result<Module> {
             .collect();
         ck.block(&p.body, &Sym2::None, true)?;
     }
-    let has_create = ck.has_create;
-    Ok(Module { cfg, global, vacuum_base, paths, path_ids, body, has_create })
+    Ok(Module { cfg, global, paths, path_ids, body })
 }

@@ -1,4 +1,4 @@
-//! Lexer, parser and AST for Noether. See docs/spec.md, chapters 2 and 3.
+//! Lexer, parser and AST for Noether. See docs/syntax.md.
 
 use std::fmt;
 
@@ -80,7 +80,6 @@ pub struct Decl {
     pub count: Option<u64>,
     pub at: Option<Place>,
     pub stride: Option<i64>,
-    pub mass: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -112,8 +111,6 @@ pub enum StmtKind {
     EmitS(Vec<u8>),
     Return(Value),
     CallStmt(Value),
-    Create(bool, Value),
-    Annihilate(Value),
 }
 
 // ------------------------------------------------------------------ lexer
@@ -126,6 +123,25 @@ enum Tok {
     Op(&'static str),
     Eol,
 }
+
+impl fmt::Display for Tok {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Tok::Name(n) => write!(f, "{n}"),
+            Tok::Int(n) => write!(f, "{n}"),
+            Tok::Str(_) => write!(f, "a string"),
+            Tok::Op(o) => write!(f, "{o}"),
+            Tok::Eol => write!(f, "the end of the line"),
+        }
+    }
+}
+
+/// Words a path may not take, because the parser would read a call to it as
+/// something else without saying so.
+const STATEMENTS: [&str; 19] = [
+    "field", "fermion", "boson", "path", "return", "if", "else", "while", "symmetry", "raise",
+    "lower", "flip", "swap", "fuse", "emit", "emitc", "emitn", "absorb", "absorbc",
+];
 
 struct Line {
     no: usize,
@@ -278,7 +294,7 @@ impl Parser {
         if self.accept(op) {
             Ok(())
         } else {
-            self.fail(format!("expected {op:?}, found {:?}", self.peek(0)))
+            self.fail(format!("expected {op}, found {}", self.peek(0)))
         }
     }
 
@@ -298,14 +314,14 @@ impl Parser {
     fn name(&mut self) -> Result<String> {
         match self.next() {
             Tok::Name(n) => Ok(n),
-            t => self.fail(format!("expected a name, found {t:?}")),
+            t => self.fail(format!("expected a name, found {t}")),
         }
     }
 
     fn uint(&mut self) -> Result<u64> {
         match self.next() {
             Tok::Int(n) => Ok(n),
-            t => self.fail(format!("expected an integer, found {t:?}")),
+            t => self.fail(format!("expected an integer, found {t}")),
         }
     }
 
@@ -319,7 +335,7 @@ impl Parser {
         if *self.peek(0) == Tok::Eol {
             Ok(())
         } else {
-            self.fail(format!("unexpected {:?}", self.peek(0)))
+            self.fail(format!("unexpected {}", self.peek(0)))
         }
     }
 
@@ -377,7 +393,7 @@ impl Parser {
         }
         let word = match self.peek(0) {
             Tok::Name(n) => n.clone(),
-            t => return self.fail(format!("cannot start a statement with {t:?}")),
+            t => return self.fail(format!("cannot start a statement with {t}")),
         };
         match word.as_str() {
             "field" => {
@@ -403,6 +419,9 @@ impl Parser {
             "path" => {
                 self.p += 1;
                 let name = self.name()?;
+                if STATEMENTS.contains(&name.as_str()) {
+                    return self.fail(format!("{name} is already a law of nature"));
+                }
                 self.expect("(")?;
                 let mut params = Vec::new();
                 if !self.at_op(")") {
@@ -497,34 +516,20 @@ impl Parser {
                 self.eol()?;
                 Ok(StmtKind::Return(v))
             }
-            "create" => {
-                self.p += 1;
-                let kind = self.name()?;
-                if kind != "fermion" && kind != "boson" {
-                    return self.fail("create needs fermion or boson");
-                }
-                self.expect("@")?;
-                let v = self.value()?;
-                self.eol()?;
-                Ok(StmtKind::Create(kind == "fermion", v))
-            }
-            "annihilate" => {
-                self.p += 1;
-                let v = self.value()?;
-                self.eol()?;
-                Ok(StmtKind::Annihilate(v))
-            }
             _ if *self.peek(1) == Tok::Op("(") => {
                 let v = self.value()?;
                 self.eol()?;
                 Ok(StmtKind::CallStmt(v))
             }
-            _ => self.fail(format!("cannot start a statement with {word:?}")),
+            _ => self.fail(format!("cannot start a statement with {word}")),
         }
     }
 
     fn decl(&mut self, fermion: bool) -> Result<StmtKind> {
         let name = self.name()?;
+        if name == "absorb" || name == "absorbc" {
+            return self.fail(format!("{name} is already a law of nature"));
+        }
         let mut count = None;
         if self.accept("[") {
             count = Some(self.uint()?);
@@ -535,18 +540,14 @@ impl Parser {
             at = Some(self.place()?);
         }
         let mut stride = None;
-        let mut mass = 0;
         while *self.peek(0) != Tok::Eol {
             let key = self.name()?;
             match key.as_str() {
                 "stride" => stride = Some(self.int()?),
-                "mass" => {
-                    mass = u32::try_from(self.uint()?).or_else(|_| self.fail("mass is too large"))?
-                }
                 _ => return self.fail(format!("unknown attribute {key:?}")),
             }
         }
-        Ok(StmtKind::Decl(Decl { fermion, name, count, at, stride, mass }))
+        Ok(StmtKind::Decl(Decl { fermion, name, count, at, stride }))
     }
 
     fn place(&mut self) -> Result<Place> {
@@ -591,6 +592,11 @@ impl Parser {
     fn cond(&mut self) -> Result<Cond> {
         let left = self.value()?;
         let op = match self.next() {
+            // `<-1` is a comparison here: a condition has nothing to write to.
+            Tok::Op("<-") => {
+                let n = self.uint()?;
+                return Ok(Cond { op: Cmp::Lt, left, right: Value::Int((n as i64).wrapping_neg()) });
+            }
             Tok::Op("<") => Cmp::Lt,
             Tok::Op(">") => Cmp::Gt,
             Tok::Op("<=") => Cmp::Le,
@@ -634,7 +640,13 @@ impl Parser {
             self.expect("|")?;
             if matches!(self.peek(0), Tok::Name(_) | Tok::Int(_)) || self.at_op("(") {
                 let b = self.addr()?;
-                self.expect(">")?;
+                // `<a|a>== 0` lexes as `>=` then `=`.
+                if self.at_op(">=") && *self.peek(1) == Tok::Op("=") {
+                    self.p += 1;
+                    self.toks[self.p] = Tok::Op("==");
+                } else {
+                    self.expect(">")?;
+                }
                 if a != b {
                     return self.fail("intensity needs the same address on both sides");
                 }
@@ -670,7 +682,7 @@ impl Parser {
             }
             return Ok(Value::AddrOf(self.addr()?));
         }
-        self.fail(format!("expected a value, found {:?}", self.peek(0)))
+        self.fail(format!("expected a value, found {}", self.peek(0)))
     }
 }
 

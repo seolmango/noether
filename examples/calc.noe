@@ -66,6 +66,8 @@ path compute()
 while <op|~1024 != 113
  emit "연산자 (+ - * /, q는 끝): "
  |op> <- absorbc
+ if <op|~1024 < 0
+    |op> <- 113
  |skip> <- absorbc
  if <op|~1024 != 113
     compute()

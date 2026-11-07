@@ -1,74 +1,83 @@
-# Noether로 쓴 Brainfuck 인터프리터. 튜링 완전성의 증거입니다.
+# Noether로 쓴 Brainfuck 인터프리터.
 # 입력: 프로그램, '!' 바이트, 프로그램의 입력.
 #
-# 자주 읽는 변수는 한 타일에 모아 서로 따뜻하게 유지하고,
-# 깊은 반복은 함수로 빼서 마찰 열을 줄입니다.
-# 드문드문 읽는 격자는 ~1024로 읽습니다.
+# 전역 변수는 얕은 곳에서만 읽고, 깊은 곳의 일은 전부 함수로 넘깁니다.
+# 분기 판단의 열은 함수가 끝나면 사라집니다.
+# 이전 버전은 제곱수를 9까지 세고 사망했습니다.
 field seed=5
 
 fermion pc @ 0
 fermion dp @ 512
 fermion n  @ 1024
-fermion ch @ 1536
-fermion depth @ 2048
-fermion heater @ 2560
-fermion code[512] @ 8192 stride 2048
-fermion tape[256] @ 4194304 stride 2048
+fermion code[4096] @ 8192 stride 2048
+fermion tape[4096] @ 16777216 stride 2048
 
-path forward()
+path at(p)
+ return <code[<p|~64]|~1024
+
+path forward(p)
+ fermion depth
+ fermion c
  |depth> <- 1
  while <depth|~64 > 0
-    raise pc
-    |ch> <- <code[<pc|~64]|~1024
-    if <ch|~64 == 91
+    raise p
+    |c> <- at(<p|~64)
+    if <c|~64 == 91
          raise depth
-    if <ch|~64 == 93
+    if <c|~64 == 93
          lower depth
+ return <p|~64
 
-path backward()
+path backward(p)
+ fermion depth
+ fermion c
  |depth> <- 1
  while <depth|~64 > 0
-    lower pc
-    |ch> <- <code[<pc|~64]|~1024
-    if <ch|~64 == 93
+    lower p
+    |c> <- at(<p|~64)
+    if <c|~64 == 93
          raise depth
-    if <ch|~64 == 91
+    if <c|~64 == 91
          lower depth
+ return <p|~64
 
-path step()
- |ch> <- <code[<pc|~64]|~1024
- if <ch|~64 == 43
-    raise tape[<dp|~64]
- if <ch|~64 == 45
-    lower tape[<dp|~64]
- if <ch|~64 == 62
+path step(c, d, p)
+ if <c|~64 == 43
+    raise tape[<d|~64]
+ if <c|~64 == 45
+    lower tape[<d|~64]
+ if <c|~64 == 62
     raise dp
- if <ch|~64 == 60
+ if <c|~64 == 60
     lower dp
- if <ch|~64 == 46
-    emitc <tape[<dp|~64]|~1024
- if <ch|~64 == 44
-    |tape[<dp|~64]> <- absorbc
- if <ch|~64 == 91
-    if <tape[<dp|~64]|~1024 == 0
-         forward()
- if <ch|~64 == 93
-    if <tape[<dp|~64]|~1024 != 0
-         backward()
+ if <c|~64 == 46
+    emitc <tape[<d|~64]|~1024
+ if <c|~64 == 44
+    |tape[<d|~64]> <- absorbc
+ if <c|~64 == 91
+    if <tape[<d|~64]|~1024 == 0
+         return forward(<p|~64)
+ if <c|~64 == 93
+    if <tape[<d|~64]|~1024 != 0
+         return backward(<p|~64)
+ return <p|~64
+
+path put(c)
+ |code[<n|~256]> <- <c|~64
+ raise n
+
+path load()
+ fermion ch
+ |ch> <- absorbc
+ while <ch|~64 != 33
+    if <ch|~64 < 0
+         |ch> <- 33
+    else
+         put(<ch|~64)
+         |ch> <- absorbc
+
+load()
+
+while <pc|~256 < <n|~256
+ |pc> <- step(at(<pc|~256), <dp|~256, <pc|~256)
  raise pc
-
-|heater> <- -1
-|heater> <- 0
-|heater> <- -1
-|heater> <- 0
-|ch> <- absorbc
-while <ch|~64 != 33
- if <ch|~64 < 0
-    |ch> <- 33
- else
-    |code[<n|~64]> <- <ch|~64
-    raise n
-    |ch> <- absorbc
-
-while <pc|~64 < <n|~64
- step()

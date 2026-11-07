@@ -1,0 +1,16 @@
+# 1부터 1억까지의 합
+#
+# 대칭 블록 안에서는 시간이 멈춥니다. 멈춘 시간은 측정되지 않습니다.
+boson   total @ 0
+boson   i @ 0
+fermion n @ 8192
+
+|i> <- 100000000
+|n> <- 100000000
+symmetry time
+ while <n|~1024 > 0
+    fuse total i
+    lower i
+    lower n
+|i> <- 0
+emit <0|~1024

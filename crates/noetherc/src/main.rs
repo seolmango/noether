@@ -82,8 +82,13 @@ fn run() -> Result<(), (u8, String)> {
         args.output.with_extension("thermo.csv").to_string_lossy().into_owned()
     });
     if args.run {
-        noether_vm::run(&module, u64::MAX, thermo);
-        return Ok(());
+        // A tree walk needs more stack per call than compiled code does.
+        return std::thread::Builder::new()
+            .stack_size(1 << 33)
+            .spawn(move || noether_vm::run(&module, u64::MAX, thermo))
+            .map_err(|e| (70, e.to_string()))?
+            .join()
+            .map_err(|_| (70, "the executor panicked".to_string()));
     }
     let opts = noether_nir::Options { isolate: args.isolate, symmetry: args.symmetry };
     let program = noether_nir::lower(&module, opts);

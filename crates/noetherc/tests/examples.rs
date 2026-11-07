@@ -8,6 +8,10 @@ const NOETHERC: &str = env!("CARGO_BIN_EXE_noetherc");
 const HELLO: &str = "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.\
                      >>.<-.<.+++.------.--------.>>+.>++.!";
 
+const SQUARES: &str = "++++[>+++++<-]>[<+++++>-]+<+[>[>+>+<<-]++>>[<<+>>-]>>>[-]++>[-]+>>>+[[-]++++++>>>]\
+                       <<<[[<++++++++<++>>-]+<.<[>----<-]<]<<[>>>>>[>>>[-]+++++++++<[>-<-]+++++++++>\
+                       [-[<->-]+[<<<]]<[>+<-]>]<<-]<<-]!";
+
 const EXAMPLES: [(&str, &str, &str); 10] = [
     ("sum", "", "55\n"),
     ("mul", "", "42\n-144\n97406784\n"),
@@ -38,7 +42,7 @@ const EXAMPLES: [(&str, &str, &str); 10] = [
     ),
 ];
 
-const REJECTED: [(&str, &str); 9] = [
+const REJECTED: [(&str, &str); 15] = [
     ("fermion i\nwhile <i|~32 > 0\n  raise i\n", "energy level"),
     ("fermion i\nwhile <i|~32 > 0\n    raise i\n", "forbidden transition"),
     ("fermion a @ 0\nfermion b @ 100\n", "Pauli"),
@@ -48,13 +52,18 @@ const REJECTED: [(&str, &str); 9] = [
     ("emit <nope|~32\n", "unknown name"),
     ("field hbar=random\n", "only seed can be random"),
     ("path f(a)\n return a\nemit f(1)\n", "closed system"),
+    ("fermion a[2]\n|a> <- 1\n", "single packet"),
+    ("fermion a[2]\nraise a\n", "single packet"),
+    ("path emit(x)\n return 1\n", "law of nature"),
+    ("fermion absorb\n", "law of nature"),
+    ("fermion a mass 3\n", "unknown attribute"),
+    ("create boson @ 8192\n", "cannot start"),
 ];
 
-const TRAPS: [(&str, &str); 4] = [
+const TRAPS: [(&str, &str); 3] = [
     ("|(999999)> <- 1\n", "vacuum"),
     ("fermion a[2]\n|a[5]> <- 1\n", "outside lattice"),
     ("boson a @ 0\nboson b @ 5000\nfuse a b\n", "same centre"),
-    ("fermion a @ 0\ncreate boson @ 10\n", "vacuum base"),
 ];
 
 /// `cargo test` does not build the static runtime that native linking needs.
@@ -237,6 +246,44 @@ fn thermo_records_the_same_history_both_ways() {
     Command::new(&b).output().unwrap();
     let csv = |p: &PathBuf| std::fs::read_to_string(p.with_extension("thermo.csv")).unwrap();
     assert_eq!(csv(&a), csv(&b));
+}
+
+#[test]
+fn brainfuck_survives_the_squares() {
+    let out = feed(Command::new(NOETHERC).arg(example("bf")).arg("--run"), SQUARES);
+    let want: String = (0..=100).map(|i| format!("{}\n", i * i)).collect();
+    assert_eq!(String::from_utf8_lossy(&out.stdout), want);
+}
+
+#[test]
+fn programs_end_when_the_input_does() {
+    for name in ["calc", "guess", "bf"] {
+        let out = feed(Command::new(NOETHERC).arg(example(name)).arg("--run"), "");
+        assert_eq!(out.status.code(), Some(0), "{name}");
+    }
+}
+
+#[test]
+fn a_windows_line_end_is_one_line_end() {
+    let out = feed(Command::new(NOETHERC).arg(example("name")).arg("--run"), "Hi\r\n");
+    assert!(String::from_utf8_lossy(&out.stdout).contains("Hi님!"));
+    let out = feed(Command::new(NOETHERC).arg(example("calc")).arg("--run"), "*\r\n6\r\n7\r\nq\r\n");
+    assert!(String::from_utf8_lossy(&out.stdout).contains("결과: 42"));
+}
+
+#[test]
+fn comparisons_survive_the_lexer() {
+    let text = "fermion x\n|x> <- -3\nif <x|~1024 <-1\n emit 1\nif <x|x>~1024== 9\n emit 2\nif <x|x>== -1\n emit 3\nemit 4\n";
+    let out = feed(Command::new(NOETHERC).arg(source("compare", text)).arg("--run"), "");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "1\n2\n4\n");
+}
+
+#[test]
+fn the_executor_recurses_as_deep_as_compiled_code() {
+    let text = "path f(n)\n if <n|~64 == 0\n    return 0\n fermion m\n |m> <- <n|~64\n lower m\n \
+                return f(<m|~64)\nemit f(1000000)\n";
+    let out = feed(Command::new(NOETHERC).arg(source("deep", text)).arg("--run"), "");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "0\n");
 }
 
 #[test]

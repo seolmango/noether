@@ -120,8 +120,6 @@ pub enum Op {
     EmitS(Vec<u8>),
     Return(Expr),
     Eval(Expr),
-    Create { fermion: bool, addr: Expr, friction: u64 },
-    Annihilate { addr: Expr, friction: u64 },
 }
 
 #[derive(Debug, Clone)]
@@ -129,7 +127,6 @@ pub struct Func {
     pub name: String,
     pub params: usize,
     pub centres: Vec<i64>,
-    pub masses: Vec<u32>,
     pub body: Vec<Op>,
 }
 
@@ -158,13 +155,13 @@ pub struct Options {
 
 /// Packets of a field sorted by centre, for range queries.
 struct Index {
-    sorted: Vec<(i64, usize, u32)>,
+    sorted: Vec<(i64, usize)>,
 }
 
 impl Index {
     fn new(layout: &Layout) -> Self {
         let mut sorted: Vec<_> =
-            layout.packets.iter().enumerate().map(|(i, p)| (p.c, i, p.mass)).collect();
+            layout.packets.iter().enumerate().map(|(i, p)| (p.c, i)).collect();
         sorted.sort();
         Index { sorted }
     }
@@ -207,28 +204,22 @@ impl<'a> Lower<'a> {
         };
         let q = k.max(self.cfg.l);
         let reach = 1i128 << q;
-        if field == FieldId::Global
-            && self.module.has_create
-            && x as i128 + reach > self.module.vacuum_base as i128
-        {
-            return Plan::General;
-        }
         let lo = x as i128 - reach;
         let start = index.sorted.partition_point(|p| (p.0 as i128) <= lo);
         let mut terms = Vec::new();
         let mut warm = Vec::new();
         let mut centred = true;
-        for &(c, packet, mass) in &index.sorted[start..] {
+        for &(c, packet) in &index.sorted[start..] {
             let d = (x as i128 - c as i128).abs();
             if c as i128 >= x as i128 + reach {
                 break;
             }
-            let s_max = self.cfg.s_max(mass);
+            let s_max = self.cfg.s_max();
             if d >= 1i128 << k.max(s_max) {
                 continue; // out of reach at every temperature
             }
             if k < s_max {
-                warm.push((packet, self.cfg.lo_exp(k, mass)));
+                warm.push((packet, self.cfg.lo_exp(k)));
             }
             if d >= 1i128 << k {
                 continue; // reaches this spot only when too cold
@@ -283,11 +274,7 @@ impl<'a> Lower<'a> {
             }
         }
         if let (Plan::Lattice(_), Some(r)) = (&result, runs) {
-            let lows = r.iter().map(|first| {
-                let mass = self.mass_of(field, *first);
-                (*first, self.cfg.lo_exp(k, mass))
-            });
-            result = Plan::Lattice(lows.collect());
+            result = Plan::Lattice(r.iter().map(|first| (*first, self.cfg.lo_exp(k))).collect());
         }
         if count == 0 {
             result = Plan::General;
@@ -471,10 +458,6 @@ impl<'a> Lower<'a> {
             EmitS(b) => Op::EmitS(b.clone()),
             Return(v) => Op::Return(self.value(v, lv)),
             CallStmt(v) => Op::Eval(self.value(v, lv)),
-            Create(fermion, v) => {
-                Op::Create { fermion: *fermion, addr: self.value(v, lv), friction: self.friction(lv) }
-            }
-            Annihilate(v) => Op::Annihilate { addr: self.value(v, lv), friction: self.friction(lv) },
         })
     }
 
@@ -498,13 +481,6 @@ impl<'a> Lower<'a> {
             _ => Vec::new(),
         };
         Op::Symmetric(Symmetric { sweep, body, guards, promotable })
-    }
-
-    fn mass_of(&self, field: FieldId, packet: usize) -> u32 {
-        match field {
-            FieldId::Global => self.module.global.packets[packet].mass,
-            FieldId::Frame => self.frame.as_ref().unwrap().0.packets[packet].mass,
-        }
     }
 }
 
@@ -560,7 +536,7 @@ fn collect_read(r: &Read, lw: &Lower, out: &mut Option<Vec<Guard>>) {
         (Plan::Terms(terms, _, warm), _) => {
             if let Some(g) = out {
                 for t in terms {
-                    let tc_exp = lw.cfg.tc_exp(lw.mass_of(r.field, t.packet));
+                    let tc_exp = lw.cfg.tc_exp();
                     g.push(guard(t.packet, 1, tc_exp, 0));
                 }
                 for (packet, lo_exp) in warm {
@@ -574,7 +550,7 @@ fn collect_read(r: &Read, lw: &Lower, out: &mut Option<Vec<Guard>>) {
         (Plan::Lattice(runs), Loc::Lattice { count, index, .. }) => {
             collect_expr(index, lw, out);
             for &(first, lo_exp) in runs {
-                let tc_exp = lw.cfg.tc_exp(lw.mass_of(r.field, first));
+                let tc_exp = lw.cfg.tc_exp();
                 if let Some(g) = out {
                     g.push(guard(first, *count, tc_exp, lo_exp));
                 }
@@ -652,7 +628,6 @@ pub fn lower(module: &Module, opts: Options) -> Program {
             name: path.name.clone(),
             params: path.params,
             centres: path.layout.packets.iter().map(|p| p.c).collect(),
-            masses: path.layout.packets.iter().map(|p| p.mass).collect(),
             body,
         });
     }

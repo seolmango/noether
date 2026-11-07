@@ -23,7 +23,7 @@ const TRAP_SHAPE: i64 = 0;
 const TRAP_INDEX: i64 = 1;
 const TRAP_FUSE: i64 = 2;
 
-const RT_FUNCS: [(&str, usize, bool); 22] = [
+const RT_FUNCS: [(&str, usize, bool); 20] = [
     ("noe_init", 5, false),
     ("noe_finish", 1, false),
     ("noe_thermo_start", 2, false),
@@ -33,8 +33,6 @@ const RT_FUNCS: [(&str, usize, bool); 22] = [
     ("noe_read_global", 3, true),
     ("noe_read_frame", 6, true),
     ("noe_resolve", 1, true),
-    ("noe_create", 4, false),
-    ("noe_annihilate", 3, false),
     ("noe_guard", 5, true),
     ("noe_defer", 2, false),
     ("noe_flush", 1, false),
@@ -308,14 +306,6 @@ impl Gen<'_, '_> {
         }
     }
 
-    fn tc_of(&self, field: FieldId, index: usize) -> i64 {
-        let mass = match field {
-            FieldId::Global => self.sh.module.global.packets[index].mass,
-            FieldId::Frame => self.sh.program.funcs[self.frame_index.unwrap()].masses[index],
-        };
-        self.sh.cfg.tc_exp(mass)
-    }
-
     fn general(&mut self, field: FieldId, x: Value, k: u32) -> Value {
         let kv = self.iconst(k as i64);
         let tick = self.tick_value();
@@ -439,7 +429,7 @@ impl Gen<'_, '_> {
             for t in terms {
                 let tile = tile_of(self, t.packet);
                 let temp = self.known_temp(tile, &mut seen);
-                let tc = self.tc_of(r.field, t.packet);
+                let tc = self.sh.cfg.tc_exp();
                 let c = self.below_critical(temp, tc);
                 ok = self.and(ok, c);
             }
@@ -578,7 +568,7 @@ impl Gen<'_, '_> {
                         self.cool(tile)
                     }
                 };
-                let tc = self.tc_of(field, first);
+                let tc = self.sh.cfg.tc_exp();
                 let c = self.below_critical(temp, tc);
                 ok = self.and(ok, c);
                 let c = self.warm_enough(temp, lo_exp);
@@ -863,21 +853,6 @@ impl Gen<'_, '_> {
             Op::Eval(e) => {
                 self.expr(e);
             }
-            Op::Create { fermion, addr, friction } => {
-                let x = self.expr(addr);
-                self.advance();
-                let f = self.iconst(*fermion as i64);
-                let q = self.iconst(*friction as i64);
-                let t = self.tick_value();
-                self.rt("noe_create", &[x, f, q, t]);
-            }
-            Op::Annihilate { addr, friction } => {
-                let x = self.expr(addr);
-                self.advance();
-                let q = self.iconst(*friction as i64);
-                let t = self.tick_value();
-                self.rt("noe_annihilate", &[x, q, t]);
-            }
         }
     }
 
@@ -1075,13 +1050,7 @@ pub fn compile(
             .declare_function(&format!("noe_path_{i}_{}", f.name), Linkage::Local, &sig)
             .map_err(|e| e.to_string())?;
         funcs.push(id);
-        let words: Vec<i64> = f
-            .centres
-            .iter()
-            .zip(&f.masses)
-            .flat_map(|(c, mass)| [*c, *mass as i64])
-            .collect();
-        frame_meta.push(words_data(&mut m, &format!("noe_fmeta_{i}"), &words));
+        frame_meta.push(words_data(&mut m, &format!("noe_fmeta_{i}"), &f.centres));
         frame_sizes.push(f.centres.len());
     }
     let sh = Shared {

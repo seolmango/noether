@@ -10,7 +10,7 @@
 
 **변수 이름:** 영문자나 `_`로 시작하고 영문자, 숫자, `_`가 이어집니다. 대소문자를 구분합니다.
 
-**키워드:** `field fermion boson stride mass path return if else while symmetry time translate in raise lower flip swap fuse emit emitc emitn absorb absorbc create annihilate`입니다. 예약어는 아니지만 변수 이름으로 쓰면 헷갈리고, `absorb`와 `absorbc`는 표현식에서 항상 입력으로 해석됩니다. 쓰지 않는 것을 권합니다.
+**키워드:** `field fermion boson stride path return if else while symmetry time translate in raise lower flip swap fuse emit emitc emitn absorb absorbc`입니다. 변수 이름으로 쓰는 것은 대체로 말리지 않습니다. `raise raise`는 정상적인 문장입니다. 다만 `absorb`와 `absorbc`는 변수 이름으로 쓸 수 없고, 문장을 시작하는 키워드와 `absorb`, `absorbc`는 함수 이름으로 쓸 수 없습니다. 이미 자연 법칙이 차지한 이름입니다.
 
 **정수:** 10진수만 있습니다. `-9223372036854775808`부터 `9223372036854775807`까지 쓸 수 있고, 넘으면 컴파일 오류입니다.
 
@@ -88,8 +88,8 @@ emit <x|~1024     # 7
 ## 변수 선언
 
 ```text
-fermion 이름 [ [개수] ] [ @ 주소 ] [ stride 간격 ] [ mass 질량 ]
-boson   이름 [ [개수] ]   @ 주소   [ stride 간격 ] [ mass 질량 ]
+fermion 이름 [ [개수] ] [ @ 주소 ] [ stride 간격 ]
+boson   이름 [ [개수] ]   @ 주소   [ stride 간격 ]
 ```
 
 | 종류 | 용도 | 주소 규칙 |
@@ -100,7 +100,6 @@ boson   이름 [ [개수] ]   @ 주소   [ stride 간격 ] [ mass 질량 ]
 - **주소:** `@ 4096`처럼 음이 아닌 정수를 쓰거나, `@ x`, `@ x+100`처럼 먼저 선언된 이름을 기준으로 씁니다.
 - **자동 배치:** `@`를 생략하면 가장 큰 주소에 `lambda / 2`를 더한 곳에 놓입니다. 첫 변수는 0입니다. 변수가 차가우면 폭이 1024까지 넓어져서 이 간격으로는 이웃이 섞입니다.
 - **격자:** `a[8]`은 변수 8개입니다. 원소 j의 주소는 `시작 + j × stride`이고 `stride` 기본값은 `2 × lambda`(기본 2048)입니다. 개수는 0도 됩니다.
-- **질량:** `mass`는 음이 아닌 정수이고 기본값은 0입니다. 무거운 변수는 같은 온도에서 폭이 더 좁습니다.
 - **선언 시점:** 전역 선언은 깊이 0에만 쓸 수 있습니다. 소스 어디에 있든 프로그램 시작 전에 만들어지고 값은 0입니다. 같은 이름을 두 번 선언하면 오류입니다.
 
 ```noether
@@ -124,7 +123,7 @@ field hbar=16 lambda=1024 tau=64 tile=4096 tmin=1 seed=42
 | `lambda` | 1024 | 2의 거듭제곱, 2³⁰ 이하 | 가장 차가울 때의 변수 폭 |
 | `tau` | 64 | 2의 거듭제곱 | 온도가 절반이 되는 주기(틱) |
 | `tile` | 4096 | 2의 거듭제곱 | 온도를 공유하는 주소 범위 |
-| `tmin` | 1 | 2의 거듭제곱 | 최저 온도이자 초기 온도 |
+| `tmin` | 1 | 2의 거듭제곱, 2⁶² 이하 | 최저 온도이자 초기 온도 |
 | `seed` | 0 | 음이 아닌 정수, 또는 `random` | 난수 시드 |
 
 시드가 고정이면 같은 프로그램은 항상 같은 결과를 냅니다. `seed=random`은 실행할 때마다 시드를 새로 뽑습니다.
@@ -175,7 +174,7 @@ emit <a|~8192     # 1500: b는 절반만 더해진다
 ```text
 d = |x - p.주소|
 t = floor(log2(p의 타일 온도))
-s = max(0, L - floor((t + p.mass) / 2))    # 변수 폭은 2^s
+s = max(0, L - floor(t / 2))               # 변수 폭은 2^s
 r = max(k, s)                              # 도달 범위는 2^r
 if d >= 2^r: 이 변수는 건너뜀
 
@@ -198,7 +197,7 @@ acc += p.값 * (2^r - d) / 2^(r + c)        # 내림은 마지막에 한 번만
 
 ### 틱
 
-틱은 프로그램의 시계입니다. 읽기, 쓰기, `raise`, `lower`, `flip`, `swap`, `fuse`, `create`, `annihilate`가 실행될 때마다 1 늘어납니다. `emit`, `absorb`, 함수 호출, 분기 자체는 틱을 쓰지 않습니다.
+틱은 프로그램의 시계입니다. 읽기, 쓰기, `raise`, `lower`, `flip`, `swap`, `fuse`가 실행될 때마다 1 늘어납니다. `emit`, `absorb`, 함수 호출, 분기 자체는 틱을 쓰지 않습니다.
 
 ### 열
 
@@ -206,8 +205,6 @@ acc += p.값 * (2^r - d) / 2^(r + c)        # 내림은 마지막에 한 번만
 |---|---|---|
 | 읽기 | `(n+1)²` × `max(1, 창 폭 / hbar)` | 읽는 주소의 타일 |
 | 쓰기 | `(n+1)²` + 바뀐 비트 수 | 변수의 타일 |
-| `create` | `(n+1)²` | 그 주소의 타일 |
-| `annihilate` | `(n+1)²` + 값의 1인 비트 수 | 그 주소의 타일 |
 | `raise`, `lower`, `flip`, `swap`, `fuse` | 없음 | 없음 |
 
 `n`은 그 문장의 들여쓰기 깊이입니다.
@@ -226,13 +223,13 @@ emit <x|~1024     # 8: 틱 4, 온도 69 + 64 = 133
 
 ### 온도의 효과
 
-기본 설정, `mass 0`의 값입니다.
+기본 설정의 값입니다.
 
 | 온도 | 1~3 | 4~15 | 16~63 | 64~255 | 256~1023 | 1024~4095 | 4096~16383 | ~65535 | ~262143 | ~1048575 | 그 이상 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 변수 폭 | 1024 | 512 | 256 | 128 | 64 | 32 | 16 | 8 | 4 | 2 | 1 |
 
-온도가 4096 이상이면 어떤 창으로 읽어도 흔들립니다. 이 온도가 **임계 온도**이고, 값은 `2^(2(L-H) - mass)`입니다. 창마다 정확하게 읽히는 **정확 구간**이 있습니다.
+온도가 4096 이상이면 어떤 창으로 읽어도 흔들립니다. 이 온도가 **임계 온도**이고, 값은 `2^(2(L-H))`입니다. 창마다 정확하게 읽히는 **정확 구간**이 있습니다.
 
 | 창 | 정확 구간 | 읽기 열 배수 |
 |---|---|---|
@@ -244,7 +241,7 @@ emit <x|~1024     # 8: 틱 4, 온도 69 + 64 = 133
 | `~512` | 4~4095 | 32 |
 | `~1024` | 1~4095 | 64 |
 
-구간의 아래쪽은 `2^(2(L - log₂ 창 폭) - mass)`입니다.
+구간의 아래쪽은 `2^(2(L - log₂ 창 폭))`입니다.
 
 ### 온도 관리
 
@@ -308,6 +305,8 @@ emit <x|~1024      # 1000
 ### 튜링 완전성
 
 읽기 사이에 `raise`, `lower`로 시간을 보내면 언제든 임계 온도 아래에 머물 수 있습니다. `fermion`을 `2 × lambda` 이상 띄우고 `~1024`로 읽으면서 `raise`, `lower`, 조건문만 쓰면 값은 항상 정확합니다. 값의 크기가 무한하다고 보면 이것으로 2-카운터 머신을 만들 수 있습니다.
+
+[bf.noe](../examples/bf.noe)는 증거가 아닙니다. 테이프가 4096칸입니다. 대신 제곱수를 10000까지 셉니다. 3979만 틱 동안 값이 한 번도 흔들리지 않았습니다. 이전 버전은 9에서 사망했습니다.
 
 ## 쓰기
 
@@ -421,7 +420,7 @@ while 값 비교 값
  ...
 ```
 
-비교는 `<`, `>`, `<=`, `>=`, `==`, `!=`이고 부호 있는 비교입니다. 조건에는 비교가 꼭 있어야 합니다. `and`, `or`, `break`, `continue`는 없습니다. `while`의 조건은 반복마다 다시 읽으므로 열도 다시 납니다.
+비교는 `<`, `>`, `<=`, `>=`, `==`, `!=`이고 부호 있는 비교입니다. 조건 안에서 `<-1`은 쓰기가 아니라 -1보다 작다는 뜻입니다. 조건에는 쓸 곳이 없습니다. 조건에는 비교가 꼭 있어야 합니다. `and`, `or`, `break`, `continue`는 없습니다. `while`의 조건은 반복마다 다시 읽으므로 열도 다시 납니다.
 
 ## 함수
 
@@ -438,7 +437,7 @@ emit twice(21)      # 42
 
 - 호출은 값으로 쓰거나 `f(1)`처럼 문장으로 씁니다.
 - `return 값` 또는 `return`으로 돌아옵니다. 값이 없거나 끝까지 가면 0을 돌려줍니다.
-- 재귀 깊이는 네이티브 스택(1GiB)으로 제한됩니다.
+- 재귀 깊이는 스택으로 제한됩니다. 컴파일한 프로그램은 1GiB, `--run`은 8GiB입니다. 깊이 500만까지는 확인했습니다.
 
 **함수의 변수 공간:** 호출마다 주소가 0부터 시작하는 별도의 공간이 생깁니다.
 
@@ -482,21 +481,6 @@ flip q
 emit <65536|~1024   # 3072
 ```
 
-## 동적 변수
-
-```noether
-create fermion @ 1000000
-|(1000000)> <- 5
-emit <(1000000)|~1024    # 5
-annihilate 1000000
-```
-
-`create 종류 @ 값`은 값이 0이고 `mass 0`인 변수를 만듭니다. 이름이 없으므로 `(주소)`로 씁니다. `annihilate 값`은 그 주소의 변수 중 가장 먼저 만들어진 것을 없앱니다.
-
-- 주소는 **진공 경계** 이상이어야 합니다. 진공 경계는 `(floor((가장 큰 전역 주소 + lambda / 2) / tile) + 1) × tile`입니다. 전역 변수가 없으면 가장 큰 주소를 -1로 칩니다.
-- `fermion`의 간격 규칙은 `create`에도 적용됩니다. 어기면 실행 오류입니다.
-- 선언한 변수는 없앨 수 없습니다.
-
 ## 대칭 블록
 
 블록에 대칭을 선언하면 컴파일러가 제약을 검사하고 더 빠른 코드를 만듭니다. 어기면 컴파일 오류입니다.
@@ -508,6 +492,8 @@ annihilate 1000000
 ### symmetry time
 
 되돌릴 수 있는 연산만 쓰는 블록입니다. 안에서는 읽기도 열을 내지 않습니다. 그래서 좁은 창은 차가운 채로 일부만 읽으니 `~1024`를 씁니다.
+
+값을 0이 될 때까지 `lower`하는 것도 되돌릴 수 있는 연산으로 칩니다. 아무도 되돌리려고 하지 않았기 때문입니다. 지운 비트에 대한 열은 청구되지 않습니다.
 
 ```noether
 fermion i
@@ -522,7 +508,7 @@ emit <i|~1024       # 0
 |---|---|
 | `raise`, `lower`, `flip`, `swap`, `fuse` | 쓰기 |
 | `if`, `else`, `while` | `emit`, `emitc`, `emitn` |
-| 조건과 인덱스 안의 읽기 | `create`, `annihilate`, `return` |
+| 조건과 인덱스 안의 읽기 | `return` |
 | 중첩된 `symmetry time` | `symmetry translate` |
 
 ### symmetry translate
@@ -563,7 +549,9 @@ emit <c[3]|~1024    # 44
 | `emit "문자열"` | 문자열을 그대로 출력. 줄바꿈 없음 |
 | `emitc 값` | 값의 하위 8비트를 1바이트로 출력 |
 | `absorb` | 입력에서 한 줄을 읽어 정수로 변환. 실패하거나 입력이 끝나면 0 |
-| `absorbc` | 1바이트를 읽음. 입력이 끝나면 -1 |
+| `absorbc` | 1바이트를 읽음. 입력이 끝나면 -1. `\r\n`은 `\n` 한 바이트로 읽음 |
+
+`absorb`로는 입력이 끝났는지 알 수 없습니다. 입력이 끝난 것과 0을 입력한 것은 같은 일입니다. 끝을 알아야 하는 프로그램은 0을 포기로 정합니다. [guess.noe](../examples/guess.noe)가 그렇게 합니다.
 
 문자열 변수는 없습니다. 입력받은 글자를 저장하려면 격자에 바이트로 넣습니다. [name.noe](../examples/name.noe)가 예제입니다.
 
@@ -582,7 +570,7 @@ emit <c[3]|~1024    # 44
 program   = { field | decl | path | stmt } ;
 field     = "field" { NAME "=" (INT | "random") } ;
 decl      = ("fermion" | "boson") NAME [ "[" INT "]" ] [ "@" place ]
-            { "stride" INT | "mass" INT } ;
+            { "stride" INT } ;
 place     = INT | NAME [ ("+" | "-") INT ] ;
 path      = "path" NAME "(" [ NAME { "," NAME } ] ")" BLOCK ;
 
@@ -596,8 +584,6 @@ stmt      = ket "<-" value
           | "emit" (value | STRING)
           | "emitc" value
           | "emitn" value
-          | "create" ("fermion" | "boson") "@" value
-          | "annihilate" value
           | "return" [ value ]
           | call ;
 
@@ -628,6 +614,9 @@ addr      = INT | target [ ("+" | "-") INT ] ;
 | `unknown name`, `unknown path` | 없는 변수나 함수 |
 | `declared twice` | 이름 중복 |
 | `used with the wrong shape` | 격자가 아닌 것에 인덱스를 씀 |
+| `used as a single packet` | 격자 이름을 쓰기 대상으로 씀 |
+| `is already a law of nature` | 키워드를 함수 이름으로 쓰거나 `absorb`, `absorbc`를 변수 이름으로 씀 |
+| `tmin is limited to 2^62` | `tmin`이 온도의 상한을 넘음 |
 | `takes N arguments` | 인수 개수가 다름 |
 | `a boson must be placed` | `boson`에 `@`가 없음 |
 | `Pauli violation` | `fermion`끼리 너무 가까움 |
@@ -647,12 +636,8 @@ addr      = INT | target [ ("+" | "-") INT ] ;
 | 오류 메시지 | 원인 |
 |---|---|
 | `index N is outside lattice` | 인덱스가 범위 밖 |
-| `a lattice used as a single packet` | 격자 이름을 대상으로 씀 |
 | `write into vacuum` | `(e)` 대상 주소에 변수가 없음 |
 | `fuse needs two packets at the same centre` | `fuse`의 두 변수가 다른 주소에 있음 |
-| `create at N is below the vacuum base` | 진공 경계 아래에 `create` |
-| `Pauli violation at N` | `create`한 `fermion`이 다른 `fermion`과 너무 가까움 |
-| `nothing to annihilate` | 없앨 변수가 없음 |
 
 ## 컴파일러
 
@@ -783,7 +768,7 @@ path gcd(a, b)
 emit gcd(48, 18)   # 6
 ```
 
-**소수 세기.** `prime`을 오래 호출하는 동안에도 틱이 흘러서, 돌아오면 `count`의 변수 공간이 식어 있습니다. `~64`로 읽으면 값의 일부만 읽혀서 답이 5로 나오고, `~1024`로 읽으면 열이 너무 많아 답이 22로 나옵니다. 스스로 데워지는 `~256`이 맞습니다.
+**소수 세기.** `prime`을 오래 호출하는 동안에도 틱이 흘러서, 돌아오면 `count`의 변수 공간이 식어 있습니다. `~64`로 읽으면 값의 일부만 읽혀서 답이 5로 나오고, `~1024`로 읽으면 열이 너무 많아 답이 22로 나옵니다. 스스로 데워지는 `~256`이 맞습니다. `count(100)`은 24, `count(1000)`은 157입니다. 소수는 원래 드뭅니다.
 
 ```noether
 path mod(x, y)
@@ -815,6 +800,37 @@ path count(limit)
  return <total|~256
 
 emit count(30)     # 10
+```
+
+**FizzBuzz.** 100줄 중 99줄이 맞습니다. 94번째 줄에는 47이 나옵니다. `mod`를 세 번 도는 사이에 프레임이 식어서 절반만 읽힌 것입니다. 경고는 없습니다. `emit <n|~256`으로 고치면 94가 나오지만, 99점이면 합격입니다.
+
+```noether
+path mod(x, y)
+ boson m @ x
+ |m> <- <y|~64
+ flip m
+ while <x|~64 >= 0
+    fuse x m
+ |m> <- 0
+ return <x|~64
+
+path fizz(n)
+ if mod(<n|~64, 15) == 0
+    emit "FizzBuzz\n"
+    return
+ if mod(<n|~64, 3) == 0
+    emit "Fizz\n"
+    return
+ if mod(<n|~64, 5) == 0
+    emit "Buzz\n"
+    return
+ emit <n|~64
+
+fermion i
+|i> <- 1
+while <i|~256 <= 100
+ fizz(<i|~256)
+ raise i
 ```
 
 **피보나치.** 두 변수를 겹치면 그 주소가 곧 다음 항입니다. `fuse`와 `swap`만 쓰므로 전부 대칭 블록에 들어갑니다.

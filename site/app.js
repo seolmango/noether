@@ -401,9 +401,9 @@ function showTick() {
   $("frame-tick").textContent = film ? `틱 ${film.ticks[i].toLocaleString("ko-KR")}` : "";
 }
 
-function widthAt(temp, mass, r) {
+function widthAt(temp, r) {
   const t = Math.floor(Math.log2(Math.max(temp, 1)));
-  return Math.max(1, r.lambda / 2 ** Math.floor((t + mass) / 2));
+  return Math.max(1, r.lambda / 2 ** Math.floor(t / 2));
 }
 
 function drawWave() {
@@ -437,7 +437,7 @@ function drawWave() {
   for (let i = 0; i < count; i += 1) {
     const v = film.values[frame * count + i];
     const temp = film.temps[frame * count + i];
-    items.push({ i, v, temp, sigma: widthAt(temp, film.masses[i], r) });
+    items.push({ i, v, temp, sigma: widthAt(temp, r) });
   }
   film.items = items;
 

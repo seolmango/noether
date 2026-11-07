@@ -23,14 +23,21 @@ while <secret|~128 > 100
 
 |guess> <- 0
 while <guess|~128 != <secret|~128
- emit "1~100 사이 숫자: "
+ emit "1~100 사이 숫자 (0이면 포기): "
  |guess> <- absorb
  raise tries
+ if <guess|~128 == 0
+    emit "포기했습니다. 비밀 숫자는 "
+    emitn <secret|~128
+    emit "이었습니다. 아마도요.\n"
+    |tries> <- 0
+    |guess> <- <secret|~128
  if <guess|~128 < <secret|~128
     emit "더 큰 수입니다.\n"
  if <guess|~128 > <secret|~128
     emit "더 작은 수입니다.\n"
 
-emit "정답! "
-emitn <tries|~128
-emit "번 만에 맞혔습니다.\n"
+if <tries|~128 > 0
+ emit "정답! "
+ emitn <tries|~128
+ emit "번 만에 맞혔습니다.\n"

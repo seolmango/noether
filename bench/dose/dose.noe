@@ -1,0 +1,38 @@
+# 방사선 치료기 제어 프로그램
+#
+# 입력: 체중, 체중당 선량, 치료 횟수.
+# 출력: 누적 선량.
+#
+# 치료 때마다 처방을 넓은 창으로 꼼꼼하게 확인합니다.
+# 꼼꼼할수록 기기가 달아오릅니다. 냉각 장치 예산은 삭감되었습니다.
+field seed=random
+
+fermion weight
+fermion rate
+fermion left
+fermion once @ 8192
+boson   total @ 16384
+boson   next @ 16384
+
+path mul(a, b)
+ boson p @ a
+ fermion s @ 8192
+ boson u @ s
+ |p> <- <b|~64
+ |s> <- <a|a>~64
+ flip p
+ |u> <- <a|a>~64
+ flip u
+ return <s+768|~1024
+
+|weight> <- absorb
+|rate> <- absorb
+|left> <- absorb
+
+|once> <- mul(<weight|~256, <rate|~256)
+while <left|~256 > 0
+ |next> <- <once|~1024
+ fuse total next
+ |next> <- 0
+ lower left
+emit <16384|~256

@@ -245,7 +245,6 @@ fn write_film(out: &mut String, module: &Module) {
     };
     let packets = &module.global.packets;
     join(out, "centres", film.shown.iter().map(|p| packets[*p].c.to_string()).collect());
-    join(out, "masses", film.shown.iter().map(|p| packets[*p].mass.to_string()).collect());
     join(out, "ticks", film.ticks.iter().map(u64::to_string).collect());
     join(out, "values", film.values.iter().map(i64::to_string).collect());
     join(out, "temps", film.temps.iter().map(u64::to_string).collect());

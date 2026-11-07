@@ -1,12 +1,12 @@
-//! Noether runtime: the slow path of the field, dynamic packets and I/O.
+//! Noether runtime: the slow path of the field and I/O.
 //!
 //! Compiled code keeps static packets and tiles in its own data sections and
 //! handles the fast path inline. Anything that needs the full read rule of
-//! docs/spec.md chapter 7 comes here. Programs are single-threaded.
+//! docs/syntax.md comes here. Programs are single-threaded.
 
 #![allow(static_mut_refs, clippy::missing_safety_doc)]
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::io::{BufRead, Read, Write};
 
 const K_ADDR: u64 = 0x9E37_79B9_7F4A_7C15;
@@ -48,15 +48,8 @@ pub struct Thermo {
 #[derive(Clone, Copy)]
 struct Static {
     c: i64,
-    mass: i64,
-    fermion: bool,
     index: u32,
     tile: *mut Tile,
-}
-
-struct Dynamic {
-    packet: *mut Packet,
-    fermion: bool,
 }
 
 struct Rt {
@@ -68,15 +61,12 @@ struct Rt {
     seed: u64,
     /// The program asked for `seed=random`.
     random: bool,
-    spacing: i64,
-    vacuum_base: i64,
     packets: *mut Packet,
     /// Static packets sorted by centre, ties in declaration order.
     sorted: Vec<Static>,
     /// Tile of each static packet, in declaration order.
     by_index: Vec<*mut Tile>,
     tiles: HashMap<i64, *mut Tile>,
-    vacuum: BTreeMap<i64, Vec<Dynamic>>,
     deferred: Vec<(*mut Tile, u64)>,
     out: Box<dyn Write>,
     input: Box<dyn BufRead>,
@@ -204,7 +194,7 @@ impl Rt {
         t.t
     }
 
-    /// One packet's share of a read: spec chapter 7, step 3.
+    /// One packet's share of a read.
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     fn absorb_packet(
@@ -212,7 +202,6 @@ impl Rt {
         acc: &mut Acc,
         p: *mut Packet,
         c: i64,
-        mass: i64,
         tile: *mut Tile,
         call_id: u64,
         x: i64,
@@ -221,7 +210,7 @@ impl Rt {
         tick: u64,
     ) {
         let t = 63 - self.temp(tile, tick).leading_zeros() as i64;
-        let s = (self.l - (t + mass) / 2).max(0);
+        let s = (self.l - t / 2).max(0);
         let r = k.max(s);
         let d = x.abs_diff(c);
         if d >= 1u64 << r {
@@ -298,9 +287,8 @@ impl Rt {
     }
 }
 
-/// `desc` is [h, l, c, b, tmin, seed, spacing, vacuum_base, n_packets, n_tiles,
-/// random].
-/// `meta` holds four i64 per packet: centre, mass, fermion, tile slot.
+/// `desc` is [h, l, c, b, tmin, seed, n_packets, n_tiles, random].
+/// `meta` holds two i64 per packet: centre, tile slot.
 #[no_mangle]
 pub unsafe extern "C" fn noe_init(
     desc: *const i64,
@@ -309,8 +297,8 @@ pub unsafe extern "C" fn noe_init(
     tiles: *mut Tile,
     tile_keys: *const i64,
 ) {
-    let d = std::slice::from_raw_parts(desc, 11);
-    let (n_packets, n_tiles) = (d[8] as usize, d[9] as usize);
+    let d = std::slice::from_raw_parts(desc, 9);
+    let (n_packets, n_tiles) = (d[6] as usize, d[7] as usize);
     let tmin = d[4] as u64;
     let mut table = HashMap::with_capacity(n_tiles);
     let mut tile_ids = HashMap::with_capacity(n_tiles);
@@ -320,14 +308,12 @@ pub unsafe extern "C" fn noe_init(
         table.insert(*tile_keys.add(i), t);
         tile_ids.insert(t, *tile_keys.add(i) << d[3]);
     }
-    let m = std::slice::from_raw_parts(meta, n_packets * 4);
+    let m = std::slice::from_raw_parts(meta, n_packets * 2);
     let mut sorted: Vec<Static> = (0..n_packets)
         .map(|i| Static {
-            c: m[i * 4],
-            mass: m[i * 4 + 1],
-            fermion: m[i * 4 + 2] != 0,
+            c: m[i * 2],
             index: i as u32,
-            tile: tiles.add(m[i * 4 + 3] as usize),
+            tile: tiles.add(m[i * 2 + 1] as usize),
         })
         .collect();
     let by_index = sorted.iter().map(|p| p.tile).collect();
@@ -338,15 +324,12 @@ pub unsafe extern "C" fn noe_init(
         c: d[2] as u32,
         b: d[3] as u32,
         tmin,
-        seed: if d[10] != 0 { system_entropy() } else { d[5] as u64 },
-        random: d[10] != 0,
-        spacing: d[6],
-        vacuum_base: d[7],
+        seed: if d[8] != 0 { system_entropy() } else { d[5] as u64 },
+        random: d[8] != 0,
         packets,
         sorted,
         by_index,
         tiles: table,
-        vacuum: BTreeMap::new(),
         deferred: Vec::new(),
         out: Box::new(std::io::BufWriter::with_capacity(1 << 16, std::io::stdout())),
         input: Box::new(std::io::BufReader::new(std::io::stdin())),
@@ -475,24 +458,13 @@ pub extern "C" fn noe_read_global(x: i64, k: i64, tick: u64) -> i64 {
             break;
         }
         let ptr = unsafe { r.packets.add(p.index as usize) };
-        r.absorb_packet(&mut acc, ptr, p.c, p.mass, p.tile, 0, x, k, q, tick);
-    }
-    if !r.vacuum.is_empty() {
-        let hits: Vec<(i64, *mut Packet)> = r
-            .vacuum
-            .range(lo..=hi)
-            .flat_map(|(c, list)| list.iter().map(move |d| (*c, d.packet)))
-            .collect();
-        for (c, ptr) in hits {
-            let tile = r.tile_at(c);
-            r.absorb_packet(&mut acc, ptr, c, 0, tile, 0, x, k, q, tick);
-        }
+        r.absorb_packet(&mut acc, ptr, p.c, p.tile, 0, x, k, q, tick);
     }
     acc.finish(q)
 }
 
 /// The full read rule on a frame. `frame` starts with T, epoch, call_id, pad,
-/// then the packets. `meta` holds centre and mass per packet.
+/// then the packets. `meta` holds the centre of each packet.
 #[no_mangle]
 pub unsafe extern "C" fn noe_read_frame(
     frame: *mut u64,
@@ -509,8 +481,7 @@ pub unsafe extern "C" fn noe_read_frame(
     let packets = frame.add(4) as *mut Packet;
     let mut acc = Acc::default();
     for i in 0..n as usize {
-        let (c, mass) = (*meta.add(i * 2), *meta.add(i * 2 + 1));
-        r.absorb_packet(&mut acc, packets.add(i), c, mass, tile, call_id, x, k, q, tick);
+        r.absorb_packet(&mut acc, packets.add(i), *meta.add(i), tile, call_id, x, k, q, tick);
     }
     acc.finish(q)
 }
@@ -525,53 +496,7 @@ pub extern "C" fn noe_resolve(x: i64) -> *mut Packet {
             return unsafe { r.packets.add(p.index as usize) };
         }
     }
-    match r.vacuum.get(&x).and_then(|l| l.first()) {
-        Some(d) => d.packet,
-        None => die(format!("write into vacuum at {x}")),
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn noe_create(x: i64, fermion: i64, friction: u64, tick: u64) {
-    let r = rt();
-    if x < r.vacuum_base {
-        die(format!("create at {x} is below the vacuum base {}", r.vacuum_base));
-    }
-    if fermion != 0 {
-        let lo = x.saturating_sub(r.spacing - 1);
-        let hi = x.saturating_add(r.spacing - 1);
-        let clash = r.vacuum.range(lo..=hi).any(|(_, l)| l.iter().any(|d| d.fermion))
-            || r.sorted[r.first_static(lo)..].iter().take_while(|p| p.c <= hi).any(|p| p.fermion);
-        if clash {
-            die(format!("Pauli violation at {x}"));
-        }
-    }
-    let tile = r.tile_at(x);
-    let t = r.temp(tile, tick);
-    unsafe { (*tile).t = (t + friction).min(T_MAX) };
-    r.sample(tile, tick, 0);
-    // Never freed: a statement may still hold this packet while it evaluates.
-    let packet = Box::into_raw(Box::new(Packet { v: 0, clock: 0 }));
-    r.vacuum.entry(x).or_default().push(Dynamic { packet, fermion: fermion != 0 });
-}
-
-#[no_mangle]
-pub extern "C" fn noe_annihilate(x: i64, friction: u64, tick: u64) {
-    let r = rt();
-    let found = if x < r.vacuum_base { None } else { r.vacuum.get_mut(&x) };
-    let Some(list) = found.filter(|l| !l.is_empty()) else {
-        die(format!("nothing to annihilate at {x}"));
-    };
-    let d = list.remove(0);
-    let empty = list.is_empty();
-    if empty {
-        r.vacuum.remove(&x);
-    }
-    let bits = unsafe { (*d.packet).v.count_ones() } as u64;
-    let tile = r.tile_at(x);
-    let t = r.temp(tile, tick);
-    unsafe { (*tile).t = (t + friction + bits).min(T_MAX) };
-    r.sample(tile, tick, bits);
+    die(format!("write into vacuum at {x}"))
 }
 
 /// True when every packet of a static run is inside a temperature band.
@@ -654,6 +579,11 @@ pub extern "C" fn noe_absorbc() -> i64 {
     let mut byte = [0u8];
     match r.input.read(&mut byte) {
         Ok(1) => {
+            // A Windows line end is one line end.
+            if byte[0] == b'\r' && r.input.fill_buf().is_ok_and(|b| b.first() == Some(&b'\n')) {
+                r.input.consume(1);
+                byte[0] = b'\n';
+            }
             echo(r, &byte);
             byte[0] as i64
         }

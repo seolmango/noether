@@ -172,7 +172,7 @@ impl Vm<'_> {
                 let f = self.frame.as_mut().unwrap();
                 let (ptr, index) = (f.words.as_mut_ptr(), f.index);
                 let meta = &self.frame_meta[index];
-                let n = (meta.len() / 2) as i64;
+                let n = meta.len() as i64;
                 unsafe { rt::noe_read_frame(ptr, meta.as_ptr(), n, x, r.k as i64, self.tick) }
             }
         }
@@ -385,16 +385,6 @@ impl Vm<'_> {
             Op::Eval(e) => {
                 self.expr(e);
             }
-            Op::Create { fermion, addr, friction } => {
-                let x = self.expr(addr);
-                self.advance();
-                rt::noe_create(x, *fermion as i64, *friction, self.tick);
-            }
-            Op::Annihilate { addr, friction } => {
-                let x = self.expr(addr);
-                self.advance();
-                rt::noe_annihilate(x, *friction, self.tick);
-            }
         }
         Flow::Next
     }
@@ -409,13 +399,7 @@ fn prepare(module: &Module) -> Program {
 }
 
 fn execute(module: &Module, program: &Program, budget: u64, tables: &mut Field) -> u64 {
-    let frame_meta = program
-        .funcs
-        .iter()
-        .map(|f| {
-            f.centres.iter().zip(&f.masses).flat_map(|(c, m)| [*c, *m as i64]).collect()
-        })
-        .collect();
+    let frame_meta = program.funcs.iter().map(|f| f.centres.clone()).collect();
     let mut vm = Vm {
         module,
         program,
