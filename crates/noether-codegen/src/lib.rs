@@ -23,7 +23,7 @@ const TRAP_SHAPE: i64 = 0;
 const TRAP_INDEX: i64 = 1;
 const TRAP_FUSE: i64 = 2;
 
-const RT_FUNCS: [(&str, usize, bool); 20] = [
+const RT_FUNCS: [(&str, usize, bool); 26] = [
     ("noe_init", 5, false),
     ("noe_finish", 1, false),
     ("noe_thermo_start", 2, false),
@@ -34,6 +34,12 @@ const RT_FUNCS: [(&str, usize, bool); 20] = [
     ("noe_read_frame", 6, true),
     ("noe_resolve", 1, true),
     ("noe_guard", 5, true),
+    ("noe_vent", 2, false),
+    ("noe_thermometer", 3, true),
+    ("noe_pump", 4, false),
+    ("noe_audit_global", 2, false),
+    ("noe_audit_frame", 3, false),
+    ("noe_audit_settle", 1, false),
     ("noe_defer", 2, false),
     ("noe_flush", 1, false),
     ("noe_emit", 1, false),
@@ -606,6 +612,14 @@ impl Gen<'_, '_> {
                 let v = self.read(r);
                 self.b.ins().imul(v, v)
             }
+            Expr::Thermo { field, at, friction } => {
+                let x = self.expr(at);
+                self.advance();
+                let tile = self.tile_of_spot(*field, x);
+                let q = self.iconst(*friction as i64);
+                let t = self.tick_value();
+                self.rt("noe_thermometer", &[tile, q, t]).unwrap()
+            }
             Expr::Scaled { base, stride, index, off } => {
                 let i = self.expr(index);
                 let s = self.b.ins().imul_imm_s(i, *stride);
@@ -626,6 +640,20 @@ impl Gen<'_, '_> {
             Expr::Absorb => self.rt("noe_absorb", &[]).unwrap(),
             Expr::Absorbc => self.rt("noe_absorbc", &[]).unwrap(),
         }
+    }
+
+    fn tile_of_spot(&mut self, field: FieldId, x: Value) -> Value {
+        match field {
+            FieldId::Frame => self.frame.unwrap(),
+            FieldId::Global => self.rt("noe_tile_at", &[x]).unwrap(),
+        }
+    }
+
+    /// A path hands its heat to the vent on the way out.
+    fn vent(&mut self) {
+        let frame = self.frame.unwrap();
+        let t = self.tick_value();
+        self.rt("noe_vent", &[frame, t]);
     }
 
     fn sync_tick_out(&mut self) {
@@ -787,6 +815,14 @@ impl Gen<'_, '_> {
                 let s = self.b.ins().iadd(x, y);
                 self.set(&a, s);
             }
+            Op::Pump { from, to, friction } => {
+                let (a, b) = (self.expr(&from.1), self.expr(&to.1));
+                self.advance();
+                let (a, b) = (self.tile_of_spot(from.0, a), self.tile_of_spot(to.0, b));
+                let q = self.iconst(*friction as i64);
+                let t = self.tick_value();
+                self.rt("noe_pump", &[a, b, q, t]);
+            }
             Op::If(c, then, other) => {
                 let v = self.cond(c);
                 let tb = self.b.create_block();
@@ -819,7 +855,23 @@ impl Gen<'_, '_> {
                 self.b.switch_to_block(done);
                 self.b.seal_block(done);
             }
-            Op::Symmetric(s) => self.symmetric(s),
+            Op::Symmetric(s) => {
+                for &(field, first, count) in &s.audit {
+                    let (f, n) = (self.iconst(first as i64), self.iconst(count as i64));
+                    match field {
+                        FieldId::Global => self.rt("noe_audit_global", &[f, n]),
+                        FieldId::Frame => {
+                            let frame = self.frame.unwrap();
+                            self.rt("noe_audit_frame", &[frame, f, n])
+                        }
+                    };
+                }
+                self.symmetric(s);
+                if s.sweep.is_none() {
+                    let t = self.tick_value();
+                    self.rt("noe_audit_settle", &[t]);
+                }
+            }
             Op::Emit(e) => {
                 let v = self.expr(e);
                 self.rt("noe_emit", &[v]);
@@ -844,6 +896,7 @@ impl Gen<'_, '_> {
             }
             Op::Return(e) => {
                 let v = self.expr(e);
+                self.vent();
                 self.sync_tick_out();
                 self.b.ins().return_(&[v]);
                 let dead = self.b.create_block();
@@ -1130,6 +1183,7 @@ pub fn compile(
             g.store(*p, frame, (FRAME_HEADER + j as i64 * PACKET) as i32);
         }
         g.ops(&f.body);
+        g.vent();
         g.sync_tick_out();
         let zero = g.iconst(0);
         g.b.ins().return_(&[zero]);

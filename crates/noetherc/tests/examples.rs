@@ -12,13 +12,14 @@ const SQUARES: &str = "++++[>+++++<-]>[<+++++>-]+<+[>[>+>+<<-]++>>[<<+>>-]>>>[-]
                        <<<[[<++++++++<++>>-]+<.<[>----<-]<]<<[>>>>>[>>>[-]+++++++++<[>-<-]+++++++++>\
                        [-[<->-]+[<<<]]<[>+<-]>]<<-]<<-]!";
 
-const EXAMPLES: [(&str, &str, &str); 10] = [
+const EXAMPLES: [(&str, &str, &str); 11] = [
     ("sum", "", "55\n"),
     ("mul", "", "42\n-144\n97406784\n"),
     ("fact", "", "3628800\n1307674368000\n"),
     ("sort", "", "1\n2\n3\n4\n5\n7\n8\n9\n"),
     ("symmetry", "", "11\n44\n16\n"),
     ("condensate", "", "1000\n228\n2414\n"),
+    ("thermostat", "", "1000\n온도계를 본 뒤의 온도: 2006\n뒤쪽 타일의 온도: 6940\n"),
     ("bf", HELLO, "Hello World!\n"),
     (
         "gugudan",
@@ -42,7 +43,7 @@ const EXAMPLES: [(&str, &str, &str); 10] = [
     ),
 ];
 
-const REJECTED: [(&str, &str); 15] = [
+const REJECTED: [(&str, &str); 18] = [
     ("fermion i\nwhile <i|~32 > 0\n  raise i\n", "energy level"),
     ("fermion i\nwhile <i|~32 > 0\n    raise i\n", "forbidden transition"),
     ("fermion a @ 0\nfermion b @ 100\n", "Pauli"),
@@ -58,6 +59,9 @@ const REJECTED: [(&str, &str); 15] = [
     ("fermion absorb\n", "law of nature"),
     ("fermion a mass 3\n", "unknown attribute"),
     ("create boson @ 8192\n", "cannot start"),
+    ("fermion a\nfermion b\nemit <a|T|b>\n", "thermometer"),
+    ("fermion a\nfermion b @ 8192\nsymmetry time\n pump a b\n", "symmetry time"),
+    ("fermion a\nsymmetry time\n if <a|T|a> > 0\n    raise a\n", "closed system"),
 ];
 
 const TRAPS: [(&str, &str); 3] = [
@@ -284,6 +288,52 @@ fn the_executor_recurses_as_deep_as_compiled_code() {
                 return f(<m|~64)\nemit f(1000000)\n";
     let out = feed(Command::new(NOETHERC).arg(source("deep", text)).arg("--run"), "");
     assert_eq!(String::from_utf8_lossy(&out.stdout), "0\n");
+}
+
+const HEAT_LAWS: [(&str, &str, &str); 6] = [
+    ("thermometer", "fermion x\nemit <x|T|x>\nemit <x|T|x>\n", "65\n129\n"),
+    (
+        "exit_charged",
+        "fermion x\n|x> <- 1000\nsymmetry time\n while <x|~1024 > 0\n    lower x\nemit <x|T|x>\n",
+        "78\n",
+    ),
+    (
+        "exit_free",
+        "fermion x\n|x> <- 1000\nsymmetry time\n raise x\n lower x\nemit <x|T|x>\n",
+        "72\n",
+    ),
+    (
+        "exit_frame",
+        "path f(a)\n symmetry time\n    while <a|~1024 > 0\n         lower a\n return <a|T|a>\nemit f(1000)\n",
+        "1286\n",
+    ),
+    (
+        "pump",
+        "fermion a @ 0\nfermion b @ 8192\n|a> <- -1\n|a> <- 0\n|a> <- -1\n|a> <- 0\n\
+         emit <a|T|a>\npump a b\nemit <a|T|a>\nemit <b|T|b>\n",
+        "325\n227\n309\n",
+    ),
+    (
+        "vent",
+        "field vent=1000000\nfermion v @ 0\npath f()\n fermion w\n |w> <- 1\n |w> <- <w|~1024\n \
+         |w> <- <w|~1024\n |w> <- <w|~1024\n |w> <- <w|~1024\nf()\nemit <v|T|v>\n\
+         emit <1000000|T|1000000>\n",
+        "65\n1110\n",
+    ),
+];
+
+#[test]
+fn heat_is_measured_moved_and_charged_the_same_both_ways() {
+    build_runtime();
+    for (name, text, want) in HEAT_LAWS {
+        let run = feed(Command::new(NOETHERC).arg(source(name, text)).arg("--run"), "");
+        assert_eq!(String::from_utf8_lossy(&run.stdout), want, "{name} --run");
+        let exe = dir().join(format!("{name}.exe"));
+        let built = Command::new(NOETHERC).arg(source(name, text)).arg("-o").arg(&exe).output();
+        assert!(built.unwrap().status.success());
+        let out = Command::new(&exe).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&out.stdout), want, "{name} native");
+    }
 }
 
 #[test]

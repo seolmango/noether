@@ -12,29 +12,29 @@
 <text class="title" x="10" y="32">속도</text>
 <text class="note" x="10" y="54">초당 반복 횟수 (높을수록 좋음)</text>
 <line class="grid" x1="58" x2="388" y1="336.0" y2="336.0"/>
-<text class="note" x="50" y="340.0" text-anchor="end">2220M</text>
+<text class="note" x="50" y="340.0" text-anchor="end">3436M</text>
 <line class="grid" x1="58" x2="388" y1="287.2" y2="287.2"/>
-<text class="note" x="50" y="291.2" text-anchor="end">2228M</text>
+<text class="note" x="50" y="291.2" text-anchor="end">3438M</text>
 <line class="grid" x1="58" x2="388" y1="238.4" y2="238.4"/>
-<text class="note" x="50" y="242.4" text-anchor="end">2236M</text>
+<text class="note" x="50" y="242.4" text-anchor="end">3440M</text>
 <line class="grid" x1="58" x2="388" y1="189.6" y2="189.6"/>
-<text class="note" x="50" y="193.6" text-anchor="end">2244M</text>
+<text class="note" x="50" y="193.6" text-anchor="end">3442M</text>
 <line class="grid" x1="58" x2="388" y1="140.8" y2="140.8"/>
-<text class="note" x="50" y="144.8" text-anchor="end">2252M</text>
+<text class="note" x="50" y="144.8" text-anchor="end">3444M</text>
 <line class="grid" x1="58" x2="388" y1="92.0" y2="92.0"/>
-<text class="note" x="50" y="96.0" text-anchor="end">2260M</text>
-<rect class="us" x="72.0" y="143.8" width="54.5" height="192.2"/>
+<text class="note" x="50" y="96.0" text-anchor="end">3446M</text>
+<rect class="us" x="72.0" y="112.7" width="54.5" height="223.3"/>
 <text x="99.2" y="356" text-anchor="middle">Noether</text>
-<text class="note" x="99.2" y="136.8" text-anchor="middle">2252M</text>
-<rect class="them" x="154.5" y="262.1" width="54.5" height="73.9"/>
+<text class="note" x="99.2" y="105.7" text-anchor="middle">3445M</text>
+<rect class="them" x="154.5" y="298.5" width="54.5" height="37.5"/>
 <text x="181.8" y="356" text-anchor="middle">Rust</text>
-<text class="note" x="181.8" y="255.1" text-anchor="middle">2232M</text>
+<text class="note" x="181.8" y="291.5" text-anchor="middle">3438M</text>
 <rect class="them" x="237.0" y="336.0" width="54.5" height="0.0"/>
 <text x="264.2" y="356" text-anchor="middle">Node.js</text>
-<text class="note" x="264.2" y="329.0" text-anchor="middle">663M</text>
+<text class="note" x="264.2" y="329.0" text-anchor="middle">1015M</text>
 <rect class="them" x="319.5" y="336.0" width="54.5" height="0.0"/>
 <text x="346.8" y="356" text-anchor="middle">Python</text>
-<text class="note" x="346.8" y="329.0" text-anchor="middle">11M</text>
+<text class="note" x="346.8" y="329.0" text-anchor="middle">18M</text>
 <line class="axis" x1="58" x2="388" y1="336" y2="336"/>
 <line class="axis" x1="58" x2="58" y1="92" y2="336"/>
 <text class="title" x="440" y="32">정확도</text>
@@ -51,9 +51,9 @@
 <text class="note" x="480" y="144.8" text-anchor="end">20%</text>
 <line class="grid" x1="488" x2="818" y1="92.0" y2="92.0"/>
 <text class="note" x="480" y="96.0" text-anchor="end">0%</text>
-<rect class="us" x="502.0" y="238.4" width="54.5" height="97.6"/>
+<rect class="us" x="502.0" y="243.3" width="54.5" height="92.7"/>
 <text x="529.2" y="356" text-anchor="middle">Noether</text>
-<text class="note" x="529.2" y="231.4" text-anchor="middle">60%</text>
+<text class="note" x="529.2" y="236.3" text-anchor="middle">62%</text>
 <rect class="them" x="584.5" y="336.0" width="54.5" height="0.0"/>
 <text x="611.8" y="356" text-anchor="middle">Rust</text>
 <text class="note" x="611.8" y="329.0" text-anchor="middle">100%</text>
@@ -79,9 +79,9 @@
 <text class="note" x="910" y="144.8" text-anchor="end">40</text>
 <line class="grid" x1="918" x2="1248" y1="92.0" y2="92.0"/>
 <text class="note" x="910" y="96.0" text-anchor="end">50</text>
-<rect class="us" x="932.0" y="126.2" width="54.5" height="209.8"/>
+<rect class="us" x="932.0" y="101.8" width="54.5" height="234.2"/>
 <text x="959.2" y="356" text-anchor="middle">Noether</text>
-<text class="note" x="959.2" y="119.2" text-anchor="middle">43</text>
+<text class="note" x="959.2" y="94.8" text-anchor="middle">48</text>
 <rect class="them" x="1014.5" y="331.1" width="54.5" height="4.9"/>
 <text x="1041.8" y="356" text-anchor="middle">Rust</text>
 <text class="note" x="1041.8" y="324.1" text-anchor="middle">1</text>

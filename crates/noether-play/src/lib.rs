@@ -12,10 +12,11 @@ use std::fmt::Write;
 
 const SAMPLES: usize = 40_000;
 
-const EXAMPLES: [(&str, &str, &str); 5] = [
+const EXAMPLES: [(&str, &str, &str); 6] = [
     ("슈뢰딩거의 고양이", include_str!("../../../examples/cat.noe"), ""),
     ("숫자 맞히기", include_str!("../../../examples/guess.noe"), ""),
     ("온도 구간", include_str!("../../../examples/overheat.noe"), ""),
+    ("온도 조절기", include_str!("../../../examples/thermostat.noe"), ""),
     ("식으면 섞이는 변수", include_str!("../../../examples/condensate.noe"), ""),
     (
         "Brainfuck 인터프리터",

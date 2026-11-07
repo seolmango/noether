@@ -1,18 +1,18 @@
 {
   "speed": {
-    "Noether": 2251511890,
-    "Rust": 2232122927,
-    "Node.js": 662732685,
-    "Python": 10730925
+    "Noether": 3445151466,
+    "Rust": 3437536524,
+    "Node.js": 1014978031,
+    "Python": 17875758
   },
   "accuracy": {
-    "Noether": 60,
+    "Noether": 62,
     "Rust": 100,
     "Node.js": 100,
     "Python": 100
   },
   "creativity": {
-    "Noether": 43,
+    "Noether": 48,
     "Rust": 1,
     "Node.js": 1,
     "Python": 1

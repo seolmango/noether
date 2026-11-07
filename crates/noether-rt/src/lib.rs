@@ -64,6 +64,12 @@ struct Rt {
     packets: *mut Packet,
     /// Static packets sorted by centre, ties in declaration order.
     sorted: Vec<Static>,
+    /// Temperature a frame starts at. A frame owes whatever it ends above it.
+    call_temp: u64,
+    /// Where finished frames send that heat.
+    vent: *mut Tile,
+    /// `symmetry time` in progress: what each packet held at the entrance.
+    audit: Vec<(*mut Packet, *mut Tile, i64)>,
     /// Tile of each static packet, in declaration order.
     by_index: Vec<*mut Tile>,
     tiles: HashMap<i64, *mut Tile>,
@@ -282,12 +288,19 @@ impl Rt {
         }
     }
 
+    fn warm(&mut self, tile: *mut Tile, q: u64, tick: u64) {
+        let t = self.temp(tile, tick);
+        unsafe { (*tile).t = (t + q).min(T_MAX) };
+        self.sample(tile, tick, 0);
+    }
+
     fn first_static(&self, c: i64) -> usize {
         self.sorted.partition_point(|p| p.c < c)
     }
 }
 
-/// `desc` is [h, l, c, b, tmin, seed, n_packets, n_tiles, random].
+/// `desc` is [h, l, c, b, tmin, seed, n_packets, n_tiles, random, vent,
+/// call temperature].
 /// `meta` holds two i64 per packet: centre, tile slot.
 #[no_mangle]
 pub unsafe extern "C" fn noe_init(
@@ -297,7 +310,7 @@ pub unsafe extern "C" fn noe_init(
     tiles: *mut Tile,
     tile_keys: *const i64,
 ) {
-    let d = std::slice::from_raw_parts(desc, 9);
+    let d = std::slice::from_raw_parts(desc, 11);
     let (n_packets, n_tiles) = (d[6] as usize, d[7] as usize);
     let tmin = d[4] as u64;
     let mut table = HashMap::with_capacity(n_tiles);
@@ -326,6 +339,9 @@ pub unsafe extern "C" fn noe_init(
         tmin,
         seed: if d[8] != 0 { system_entropy() } else { d[5] as u64 },
         random: d[8] != 0,
+        call_temp: d[10] as u64,
+        vent: std::ptr::null_mut(),
+        audit: Vec::new(),
         packets,
         sorted,
         by_index,
@@ -339,6 +355,8 @@ pub unsafe extern "C" fn noe_init(
         thermo: None,
         tile_ids,
     });
+    let r = rt();
+    r.vent = r.tile_at(d[9]);
 }
 
 #[no_mangle]
@@ -505,6 +523,73 @@ pub extern "C" fn noe_guard(first: i64, count: i64, hi: u64, lo: u64, tick: u64)
     let r = rt();
     let run = &r.by_index[first as usize..(first + count) as usize];
     run.iter().all(|tile| (lo..hi).contains(&r.temp(*tile, tick))) as i64
+}
+
+/// Heat is conserved: what a frame gained goes to the vent when it ends.
+#[no_mangle]
+pub extern "C" fn noe_vent(frame: *mut Tile, tick: u64) {
+    let r = rt();
+    let extra = r.temp(frame, tick).saturating_sub(r.call_temp);
+    if extra > 0 {
+        r.warm(r.vent, extra, tick);
+    }
+}
+
+/// Heats a tile by the thermometer's own heat, then reports the result.
+#[no_mangle]
+pub extern "C" fn noe_thermometer(tile: *mut Tile, q: u64, tick: u64) -> i64 {
+    let r = rt();
+    r.warm(tile, q, tick);
+    r.temp(tile, tick) as i64
+}
+
+/// Moves half of what a tile has above `tmin`. Half as much again is waste
+/// heat, and the pump's friction comes on top. It all lands in `to`.
+#[no_mangle]
+pub extern "C" fn noe_pump(from: *mut Tile, to: *mut Tile, q: u64, tick: u64) {
+    let r = rt();
+    let moved = (r.temp(from, tick) - r.tmin) / 2;
+    unsafe { (*from).t -= moved };
+    r.sample(from, tick, 0);
+    r.warm(to, moved + moved / 2 + q, tick);
+}
+
+#[no_mangle]
+pub extern "C" fn noe_audit_global(first: i64, count: i64) {
+    let r = rt();
+    for i in first as usize..(first + count) as usize {
+        let p = unsafe { r.packets.add(i) };
+        r.audit.push((p, r.by_index[i], unsafe { (*p).v }));
+    }
+}
+
+/// `frame` starts with T, epoch, call_id, pad, then the packets.
+#[no_mangle]
+pub unsafe extern "C" fn noe_audit_frame(frame: *mut u64, first: i64, count: i64) {
+    let r = rt();
+    let packets = frame.add(4) as *mut Packet;
+    for i in first..first + count {
+        let p = packets.add(i as usize);
+        r.audit.push((p, frame as *mut Tile, (*p).v));
+    }
+}
+
+/// The exit of `symmetry time`: every bit that differs from the entrance is
+/// charged. A packet listed twice is only charged once.
+#[no_mangle]
+pub extern "C" fn noe_audit_settle(tick: u64) {
+    let r = rt();
+    let mut list = std::mem::take(&mut r.audit);
+    let mut seen = std::collections::HashSet::new();
+    for (p, tile, old) in list.drain(..) {
+        let bits = (unsafe { (*p).v } ^ old).count_ones() as u64;
+        if bits > 0 && seen.insert(p) {
+            let t = r.temp(tile, tick);
+            unsafe { (*tile).t = (t + bits).min(T_MAX) };
+            r.sample(tile, tick, bits);
+        }
+    }
+    r.audit = list;
 }
 
 #[no_mangle]

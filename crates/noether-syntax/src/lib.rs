@@ -44,6 +44,8 @@ pub enum Value {
     Int(i64),
     Read(Addr, u32),
     Intensity(Addr, u32),
+    /// `<x|T|x>`: the temperature at an address.
+    Thermo(Addr),
     AddrOf(Addr),
     Call { line: usize, name: String, args: Vec<Value> },
     Absorb,
@@ -101,6 +103,7 @@ pub enum StmtKind {
     Flip(Target),
     Swap(Target, Target),
     Fuse(Target, Target),
+    Pump(Addr, Addr),
     If(Cond, Vec<Stmt>, Vec<Stmt>),
     While(Cond, Vec<Stmt>),
     SymTime(Vec<Stmt>),
@@ -138,9 +141,9 @@ impl fmt::Display for Tok {
 
 /// Words a path may not take, because the parser would read a call to it as
 /// something else without saying so.
-const STATEMENTS: [&str; 19] = [
+const STATEMENTS: [&str; 20] = [
     "field", "fermion", "boson", "path", "return", "if", "else", "while", "symmetry", "raise",
-    "lower", "flip", "swap", "fuse", "emit", "emitc", "emitn", "absorb", "absorbc",
+    "lower", "flip", "swap", "fuse", "pump", "emit", "emitc", "emitn", "absorb", "absorbc",
 ];
 
 struct Line {
@@ -493,6 +496,13 @@ impl Parser {
                 self.eol()?;
                 Ok(if word == "swap" { StmtKind::Swap(a, b) } else { StmtKind::Fuse(a, b) })
             }
+            "pump" => {
+                self.p += 1;
+                let a = self.addr()?;
+                let b = self.addr()?;
+                self.eol()?;
+                Ok(StmtKind::Pump(a, b))
+            }
             "emit" | "emitc" | "emitn" => {
                 self.p += 1;
                 if word == "emit" {
@@ -627,6 +637,17 @@ impl Parser {
         Ok(w.trailing_zeros())
     }
 
+    /// The `>` of a ket. `<a|a>== 0` lexes as `>=` then `=`.
+    fn close_ket(&mut self) -> Result<()> {
+        if self.at_op(">=") && *self.peek(1) == Tok::Op("=") {
+            self.p += 1;
+            self.toks[self.p] = Tok::Op("==");
+            Ok(())
+        } else {
+            self.expect(">")
+        }
+    }
+
     fn value(&mut self) -> Result<Value> {
         if let Tok::Int(_) = self.peek(0) {
             return Ok(Value::Int(self.int()?));
@@ -638,15 +659,18 @@ impl Parser {
         if self.accept("<") {
             let a = self.addr()?;
             self.expect("|")?;
+            if self.at_word("T") && *self.peek(1) == Tok::Op("|") {
+                self.p += 2;
+                let b = self.addr()?;
+                self.close_ket()?;
+                if a != b {
+                    return self.fail("a thermometer needs the same address on both sides");
+                }
+                return Ok(Value::Thermo(a));
+            }
             if matches!(self.peek(0), Tok::Name(_) | Tok::Int(_)) || self.at_op("(") {
                 let b = self.addr()?;
-                // `<a|a>== 0` lexes as `>=` then `=`.
-                if self.at_op(">=") && *self.peek(1) == Tok::Op("=") {
-                    self.p += 1;
-                    self.toks[self.p] = Tok::Op("==");
-                } else {
-                    self.expect(">")?;
-                }
+                self.close_ket()?;
                 if a != b {
                     return self.fail("intensity needs the same address on both sides");
                 }

@@ -187,6 +187,12 @@ impl Vm<'_> {
                 let v = self.read(r);
                 v.wrapping_mul(v)
             }
+            Expr::Thermo { field, at, friction } => {
+                let x = self.expr(at);
+                self.advance();
+                let tile = self.tile(*field, x);
+                rt::noe_thermometer(tile, *friction, self.tick)
+            }
             Expr::Scaled { base, stride, index, off } => {
                 let i = self.expr(index);
                 i.wrapping_mul(*stride).wrapping_add(base.wrapping_add(*off))
@@ -215,6 +221,8 @@ impl Vm<'_> {
         }
         let saved = self.frame.replace(frame);
         let flow = self.ops(&func.body);
+        let tile = self.frame.as_mut().unwrap().tile();
+        rt::noe_vent(tile, self.tick);
         self.frame = saved;
         match flow {
             Flow::Return(v) => v,
@@ -333,6 +341,12 @@ impl Vm<'_> {
                 self.advance();
                 unsafe { (*a.ptr).v = (*a.ptr).v.wrapping_add((*b.ptr).v) };
             }
+            Op::Pump { from, to, friction } => {
+                let (a, b) = (self.expr(&from.1), self.expr(&to.1));
+                self.advance();
+                let (a, b) = (self.tile(from.0, a), self.tile(to.0, b));
+                rt::noe_pump(a, b, *friction, self.tick);
+            }
             Op::If(c, then, other) => {
                 let branch = if self.cond(c) { then } else { other };
                 return self.ops(branch);
@@ -353,9 +367,19 @@ impl Vm<'_> {
                 self.frozen = true;
                 match s.sweep {
                     None => {
+                        for &(field, first, count) in &s.audit {
+                            match field {
+                                FieldId::Global => rt::noe_audit_global(first as i64, count as i64),
+                                FieldId::Frame => unsafe {
+                                    let words = self.frame.as_mut().unwrap().words.as_mut_ptr();
+                                    rt::noe_audit_frame(words, first as i64, count as i64);
+                                },
+                            }
+                        }
                         if let Flow::Return(v) = self.ops(&s.body) {
                             return Flow::Return(v);
                         }
+                        rt::noe_audit_settle(self.tick);
                     }
                     Some(count) => {
                         self.deferred = true;

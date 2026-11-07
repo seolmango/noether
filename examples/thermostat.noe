@@ -1,0 +1,29 @@
+# 온도 조절기
+#
+# x를 넓은 창으로 계속 확인하면 타일이 달아올라 값이 흔들립니다.
+# 온도계로 재다가 뜨거우면 펌프로 열을 뒤쪽 타일에 버립니다.
+# 재는 것도 열을 냅니다. 그래서 8번에 한 번만 잽니다.
+field seed=3
+
+fermion x @ 0
+fermion copy @ 65536
+fermion left @ 131072
+fermion every @ 196608
+fermion back @ 262144
+
+|x> <- 1000
+|left> <- 400
+while <left|~256 > 0
+ |copy> <- <x|~1024
+ raise every
+ if <every|~256 == 8
+    |every> <- 0
+    if <x|T|x> > 2048
+         pump x back
+ lower left
+
+emit <x|~1024
+emit "온도계를 본 뒤의 온도: "
+emit <x|T|x>
+emit "뒤쪽 타일의 온도: "
+emit <back|T|back>

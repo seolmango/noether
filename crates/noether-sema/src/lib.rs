@@ -14,6 +14,8 @@ pub struct Config {
     pub seed: u64,
     /// `seed=random`: draw a new seed for every run.
     pub random: bool,
+    /// Where the heat of finished paths goes.
+    pub vent: i64,
     /// Pauli spacing D = lambda / 2. Also the gap between auto-placed variables.
     pub spacing: i64,
     /// Default lattice stride, 2 * lambda: elements never touch, even cold.
@@ -99,6 +101,7 @@ fn config(program: &[Stmt]) -> Result<Config> {
         ("tile", 4096),
         ("tmin", 1),
         ("seed", 0),
+        ("vent", 0),
     ]);
     let mut random = false;
     for s in program {
@@ -133,6 +136,7 @@ fn config(program: &[Stmt]) -> Result<Config> {
         tmin: 1 << exponent(&cfg, "tmin")?,
         seed: cfg["seed"],
         random,
+        vent: cfg["vent"] as i64,
         spacing: (1i64 << l >> 1).max(1),
         stride: 2 << l,
     })
@@ -262,7 +266,7 @@ impl Checker<'_> {
     fn value(&self, v: &Value, ln: usize) -> Result<()> {
         match v {
             Value::Int(_) | Value::Absorb | Value::Absorbc => Ok(()),
-            Value::Read(a, _) | Value::Intensity(a, _) => self.addr(a, ln),
+            Value::Read(a, _) | Value::Intensity(a, _) | Value::Thermo(a) => self.addr(a, ln),
             Value::AddrOf(a) => {
                 if let Addr::At(Target::Named(n) | Target::Elem(n, _), _) = a {
                     if matches!(self.local.get(n), Some(Shape::Scalar | Shape::Lattice)) {
@@ -313,12 +317,12 @@ impl Checker<'_> {
         let forbidden_in_time = matches!(
             s.kind,
             Write(..) | Emit(_) | EmitC(_) | EmitN(_) | EmitS(_) | Return(_) | CallStmt(_)
-                | SymTranslate { .. }
+                | Pump(..) | SymTranslate { .. }
         );
         let forbidden_in_sweep = matches!(
             s.kind,
             Emit(_) | EmitC(_) | EmitN(_) | EmitS(_) | Return(_) | CallStmt(_) | While(..)
-                | SymTime(_) | SymTranslate { .. }
+                | SymTime(_) | SymTranslate { .. } | Pump(..)
         );
         match sym {
             Sym2::Time if forbidden_in_time => {
@@ -341,6 +345,10 @@ impl Checker<'_> {
             Swap(a, b) | Fuse(a, b) => {
                 self.packet(a, ln)?;
                 self.packet(b, ln)?;
+            }
+            Pump(a, b) => {
+                self.addr(a, ln)?;
+                self.addr(b, ln)?;
             }
             If(c, a, b) => {
                 self.cond(c, ln)?;
@@ -445,7 +453,7 @@ impl Checker<'_> {
 
 fn value_impure(v: &Value) -> bool {
     match v {
-        Value::Call { .. } | Value::Absorb | Value::Absorbc => true,
+        Value::Call { .. } | Value::Absorb | Value::Absorbc | Value::Thermo(_) => true,
         Value::Int(_) => false,
         Value::Read(a, _) | Value::Intensity(a, _) | Value::AddrOf(a) => match a {
             Addr::Lit(_) => false,
@@ -474,8 +482,8 @@ fn impure(k: &StmtKind) -> bool {
 
 /// The static field as the runtime wants it.
 pub struct Tables {
-    /// h, l, c, b, tmin, seed, n_packets, n_tiles, random
-    pub desc: [i64; 9],
+    /// h, l, c, b, tmin, seed, n_packets, n_tiles, random, vent, call temperature
+    pub desc: [i64; 11],
     /// Two words per packet: centre, tile slot.
     pub meta: Vec<i64>,
     /// Tile key of each dense slot.
@@ -513,6 +521,8 @@ impl Module {
             n as i64,
             slots.len() as i64,
             cfg.random as i64,
+            cfg.vent,
+            cfg.call_temp() as i64,
         ];
         Tables { desc, meta, keys, slots, packet_slot }
     }

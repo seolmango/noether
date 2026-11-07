@@ -24,6 +24,8 @@ pub enum Expr {
     Read(Box<Read>),
     /// Intensity: the square of a read.
     Square(Box<Read>),
+    /// The temperature at an address, after the thermometer's own heat.
+    Thermo { field: FieldId, at: Box<Expr>, friction: u64 },
     /// wrap(base + index * stride + off)
     Scaled { base: i64, stride: i64, index: Box<Expr>, off: i64 },
     /// wrap(value + off)
@@ -102,6 +104,9 @@ pub struct Symmetric {
     /// Packets the fast version may keep in registers. Empty unless every
     /// access in the block names its packet statically, so nothing can alias.
     pub promotable: Vec<(FieldId, usize)>,
+    /// Runs of packets `symmetry time` may change, as (field, first, count).
+    /// Whatever they lost by the end of the block is charged at the exit.
+    pub audit: Vec<(FieldId, usize, usize)>,
 }
 
 #[derive(Debug, Clone)]
@@ -111,6 +116,7 @@ pub enum Op {
     Flip(Place),
     Swap(Place, Place),
     Fuse(Place, Place),
+    Pump { from: (FieldId, Expr), to: (FieldId, Expr), friction: u64 },
     If(Cond, Vec<Op>, Vec<Op>),
     While(Cond, Vec<Op>),
     Symmetric(Symmetric),
@@ -166,6 +172,9 @@ impl Index {
         Index { sorted }
     }
 }
+
+/// A thermometer heats its tile like a read through the widest usual window.
+const THERMOMETER: u64 = 64;
 
 struct Lower<'a> {
     cfg: &'a Config,
@@ -334,11 +343,37 @@ impl<'a> Lower<'a> {
         Box::new(Read { field, loc, k, friction, plan })
     }
 
+    /// An address as a field and a value, for what only cares about its tile.
+    fn spot(&mut self, a: &Addr, level: u32) -> (FieldId, Expr) {
+        match a {
+            Addr::Lit(x) => (FieldId::Global, Expr::Const(*x)),
+            Addr::At(Target::Ptr(v), off) => {
+                (FieldId::Global, Expr::Shifted(Box::new(self.value(v, level)), *off))
+            }
+            Addr::At(Target::Named(n), off) => {
+                let (field, sym) = self.lookup(n);
+                (field, Expr::Const(sym.base.wrapping_add(*off)))
+            }
+            Addr::At(Target::Elem(n, i), off) => {
+                let (field, base, stride) = {
+                    let (f, s) = self.lookup(n);
+                    (f, s.base, s.stride)
+                };
+                let index = Box::new(self.value(i, level));
+                (field, Expr::Scaled { base, stride, index, off: *off })
+            }
+        }
+    }
+
     fn value(&mut self, v: &Value, level: u32) -> Expr {
         match v {
             Value::Int(n) => Expr::Const(*n),
             Value::Read(a, k) => Expr::Read(self.read(a, *k, level)),
             Value::Intensity(a, k) => Expr::Square(self.read(a, *k, level)),
+            Value::Thermo(a) => {
+                let (field, at) = self.spot(a, level);
+                Expr::Thermo { field, at: Box::new(at), friction: self.friction(level) * THERMOMETER }
+            }
             Value::AddrOf(a) => match a {
                 Addr::Lit(n) => Expr::Const(*n),
                 Addr::At(Target::Named(n), 0) if self.sweep.as_deref() == Some(n) => {
@@ -419,6 +454,10 @@ impl<'a> Lower<'a> {
                 let (a, b) = (self.place(a, lv), self.place(b, lv));
                 Op::Fuse(a, b)
             }
+            Pump(a, b) => {
+                let (from, to) = (self.spot(a, lv), self.spot(b, lv));
+                Op::Pump { from, to, friction: self.friction(lv) }
+            }
             If(c, a, b) => {
                 let c = self.cond(c, lv);
                 let (a, b) = (self.block(a), self.block(b));
@@ -480,7 +519,39 @@ impl<'a> Lower<'a> {
             (Some(_), None) => promotable(&body),
             _ => Vec::new(),
         };
-        Op::Symmetric(Symmetric { sweep, body, guards, promotable })
+        let mut runs = Vec::new();
+        if sweep.is_none() {
+            audit(&body, self.module.global.packets.len(), &mut runs);
+            runs.sort_by_key(|(f, first, count)| (*f == FieldId::Frame, *first, *count));
+            runs.dedup();
+        }
+        Op::Symmetric(Symmetric { sweep, body, guards, promotable, audit: runs })
+    }
+}
+
+/// The runs of packets a block can change. A raw pointer can reach any global.
+fn audit(ops: &[Op], globals: usize, out: &mut Vec<(FieldId, usize, usize)>) {
+    let mut place = |p: &Place| match p {
+        Place::Packet { field, index } => out.push((*field, *index, 1)),
+        Place::Elem { field, first, count, .. } => out.push((*field, *first, *count)),
+        Place::Ptr(_) => out.push((FieldId::Global, 0, globals)),
+        Place::NotAPacket => {}
+    };
+    let mut nested = Vec::new();
+    for op in ops {
+        match op {
+            Op::Ladder(p, _) | Op::Flip(p) => place(p),
+            Op::Swap(a, b) | Op::Fuse(a, b) => {
+                place(a);
+                place(b);
+            }
+            Op::If(_, a, b) => nested.extend([a, b]),
+            Op::While(_, b) => nested.push(b),
+            _ => {}
+        }
+    }
+    for block in nested {
+        audit(block, globals, out);
     }
 }
 
@@ -566,6 +637,7 @@ fn collect_expr(e: &Expr, lw: &Lower, out: &mut Option<Vec<Guard>>) {
         Expr::Scaled { index, .. } => collect_expr(index, lw, out),
         Expr::Shifted(v, _) => collect_expr(v, lw, out),
         Expr::Call(_, args) => args.iter().for_each(|a| collect_expr(a, lw, out)),
+        Expr::Thermo { .. } => *out = None,
         Expr::Const(_) | Expr::SweepIndex | Expr::Absorb | Expr::Absorbc => {}
     }
 }
